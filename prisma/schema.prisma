@@ -1,0 +1,127 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  createdAt DateTime @default(now())
+}
+
+model Brand {
+  id                   String      @id @default(cuid())
+  name                 String      @unique
+  tagline              String?
+  language             String
+  tone                 String
+  editorialCovers      String      // JSON array of topics this brand covers
+  editorialNever       String      // JSON array of topics this brand never covers
+  audienceSize         String?
+  audienceDemographics String?     // JSON object
+  audienceGeography    String?     // JSON object
+  audienceInterests    String?     // JSON object
+  audienceDescription  String?
+  activePlatforms      String      // JSON array of platform objects with name and role
+  voiceRules           String      // JSON array of voice rules
+  editorialPriorities  String      // JSON array ordered by priority
+  contentFrequency     String?     // JSON object of platform frequency targets
+  isActive             Boolean     @default(true)
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+  narratives           Narrative[]
+}
+
+model PlatformRule {
+  id                String   @id @default(cuid())
+  narrativeType     String   // e.g., "system_failure", "single_number", "human_impact"
+  primaryPlatform   String   // e.g., "twitter_thread", "youtube_longform", "blog"
+  secondaryPlatform String?  // optional secondary
+  brandName         String?  // if null, applies to all brands
+  sendWhen          String   // JSON array of conditions
+  neverSend         String   // JSON array of exclusions
+  speedPriority     String   // e.g., "30_minutes", "2_4_hours", "24_48_hours"
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model TrendBatch {
+  id         String   @id @default(cuid())
+  importedAt DateTime @default(now())
+  source     String   @default("khabri_manual")
+  trends     Trend[]
+}
+
+model Trend {
+  id         String      @id @default(cuid())
+  rank       Int
+  score      Int
+  headline   String
+  reason     String
+  status     String      @default("pending") // pending, selected, skipped, monitoring
+  skipReason String?
+  batchId    String
+  batch      TrendBatch  @relation(fields: [batchId], references: [id])
+  createdAt  DateTime    @default(now())
+  narratives Narrative[]
+}
+
+model Narrative {
+  id                String   @id @default(cuid())
+  angle             String
+  whyThisAngle      String
+  informationGap    String
+  priority          Int      // 1 = make today, 2 = this week, 3 = monitoring
+  platform          String
+  secondaryPlatform String?
+  format            String
+  urgency           String
+  status            String   @default("planned") // planned, researching, producing, published, killed
+  trendId           String
+  trend             Trend    @relation(fields: [trendId], references: [id])
+  brandId           String
+  brand             Brand    @relation(fields: [brandId], references: [id])
+  researchPrompt    String?
+  researchResults   String?
+  enginePrompt      String?
+  packageData       String?  // JSON with titles, thumbnail, description, tags, timing
+  finalContent      String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model EditorialLog {
+  id             String   @id @default(cuid())
+  action         String   // "selected", "skipped", "override", "published"
+  reasoning      String
+  trendHeadline  String
+  narrativeAngle String?
+  platform       String?
+  brandName      String?
+  createdAt      DateTime @default(now())
+}
+
+model PerformanceData {
+  id             String    @id @default(cuid())
+  narrativeId    String?
+  platform       String
+  brandName      String
+  contentType    String    // thread, video, blog, reel, tweet
+  impressions    Int?
+  engagementRate Float?
+  replies        Int?
+  retweets       Int?
+  bookmarks      Int?
+  views          Int?
+  watchTime      Float?
+  ctr            Float?
+  notes          String?
+  publishedAt    DateTime?
+  recordedAt     DateTime  @default(now())
+}
