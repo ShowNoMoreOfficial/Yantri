@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+// Split-view layout replaces tabs — no tabs import needed
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   AlertDialog,
@@ -430,7 +430,7 @@ export default function NarrativeTreeDetailPage() {
               <div className="p-1.5 bg-indigo-500/10 rounded-lg text-indigo-400">
                 <Signal className="w-4 h-4" />
               </div>
-              <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Nodes</span>
+              <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Signals</span>
             </div>
             <div className="text-3xl font-black text-foreground">{tree.nodes.length}</div>
           </CardContent>
@@ -469,204 +469,227 @@ export default function NarrativeTreeDetailPage() {
         </Card>
       </div>
 
-      {/* Tabbed Content */}
-      <Tabs defaultValue="nodes" className="w-full">
-        <TabsList className="bg-zinc-900/50 border border-white/5 rounded-xl p-1 mb-6">
-          <TabsTrigger
-            value="nodes"
-            className="rounded-lg text-xs font-bold data-[state=active]:bg-white/10 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-black/20 text-zinc-500 px-4 py-2"
-          >
-            <Signal className="w-3.5 h-3.5 mr-2" />
-            Nodes ({tree.nodes.length})
-          </TabsTrigger>
-          <TabsTrigger
-            value="dossier"
-            className="rounded-lg text-xs font-bold data-[state=active]:bg-white/10 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-black/20 text-zinc-500 px-4 py-2"
-          >
-            <BookOpen className="w-3.5 h-3.5 mr-2" />
-            Dossier
-          </TabsTrigger>
-          <TabsTrigger
-            value="content"
-            className="rounded-lg text-xs font-bold data-[state=active]:bg-white/10 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-black/20 text-zinc-500 px-4 py-2"
-          >
-            <FileText className="w-3.5 h-3.5 mr-2" />
-            Content ({tree.contentPieces.length})
-          </TabsTrigger>
-        </TabsList>
+      {/* ── Split View: Signals (Left) | Outputs (Right) ──────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* LEFT COLUMN — The Signals */}
+        <div>
+          <h2 className="text-xs font-black text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+            <Signal className="w-4 h-4 text-indigo-400" />
+            Signals & Sub-Trends ({tree.nodes.length})
+          </h2>
 
-        {/* ── Nodes Tab ─────────────────────────────────────────────────────── */}
-        <TabsContent value="nodes">
           {tree.nodes.length === 0 ? (
             <Card className="rounded-2xl border-border">
               <CardContent className="p-6">
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <div className="w-14 h-14 bg-zinc-800/50 rounded-full flex items-center justify-center mb-4">
-                    <Signal className="w-7 h-7 text-zinc-600" />
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="w-12 h-12 bg-zinc-800/50 rounded-full flex items-center justify-center mb-3">
+                    <Signal className="w-6 h-6 text-zinc-600" />
                   </div>
-                  <p className="text-zinc-400 font-semibold text-sm">No nodes in this tree.</p>
-                  <p className="text-zinc-600 text-xs mt-1">Nodes are added when new signals match this narrative cluster.</p>
+                  <p className="text-zinc-400 font-semibold text-sm">No signals yet.</p>
+                  <p className="text-zinc-600 text-xs mt-1">Signals attach when new trends match this narrative.</p>
                 </div>
               </CardContent>
             </Card>
           ) : (
-            <div className="space-y-3">
-              {tree.nodes.map((node, index) => {
-                const signalData = node.signalData as Record<string, unknown>;
-                return (
-                  <Card key={node.id} className="rounded-2xl border-border card-hover group animate-fade-in">
-                    <CardContent className="p-5">
-                      <div className="flex items-start gap-4">
-                        {/* Timeline indicator */}
-                        <div className="flex flex-col items-center shrink-0">
-                          <div className={`w-3 h-3 rounded-full ${index === 0 ? "bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]" : "bg-zinc-700"}`} />
-                          {index < tree.nodes.length - 1 && (
-                            <div className="w-px h-full min-h-[40px] bg-zinc-800 mt-1" />
-                          )}
-                        </div>
+            <div className="space-y-0">
+              {/* Root indicator */}
+              <div className="flex items-center gap-3 mb-4 px-1">
+                <div className="w-4 h-4 rounded-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)] shrink-0" />
+                <div>
+                  <div className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Root Trend</div>
+                  <div className="text-sm font-bold text-foreground leading-snug">{tree.rootTrend}</div>
+                </div>
+              </div>
 
-                        {/* Content */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-3 mb-2">
-                            <h4 className="text-sm font-bold text-foreground group-hover:text-indigo-300 transition-colors leading-snug">
+              {/* Node timeline */}
+              <div className="ml-[7px] border-l-2 border-zinc-800 pl-5 space-y-3">
+                {tree.nodes.map((node, index) => {
+                  const signalData = node.signalData as Record<string, unknown>;
+                  return (
+                    <div key={node.id} className="relative animate-fade-in">
+                      {/* Timeline dot */}
+                      <div className={`absolute -left-[27px] top-1.5 w-2.5 h-2.5 rounded-full border-2 border-zinc-900 ${
+                        index === 0 ? "bg-indigo-400" : "bg-zinc-600"
+                      }`} />
+
+                      <Card className="rounded-xl border-border card-hover group">
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between gap-2 mb-1.5">
+                            <h4 className="text-sm font-bold text-foreground group-hover:text-indigo-300 transition-colors leading-snug line-clamp-2">
                               {node.signalTitle}
                             </h4>
-                            <div className="flex items-center gap-2 shrink-0">
-                              {node.signalScore > 0 && (
-                                <Badge variant="outline" className="text-[10px] font-bold border-zinc-700 text-zinc-400">
-                                  Score: {node.signalScore}
-                                </Badge>
-                              )}
-                            </div>
+                            {node.signalScore > 0 && (
+                              <Badge variant="outline" className="text-[10px] font-bold border-zinc-700 text-zinc-400 shrink-0">
+                                {node.signalScore}
+                              </Badge>
+                            )}
                           </div>
 
-                          {/* Signal details */}
                           {typeof signalData.reason === "string" && signalData.reason && (
-                            <p className="text-xs text-zinc-500 leading-relaxed mb-2">
+                            <p className="text-xs text-zinc-500 leading-relaxed mb-1.5 line-clamp-2">
                               {signalData.reason}
                             </p>
                           )}
 
-                          {typeof signalData.source === "string" && signalData.source.length > 0 && (
-                            <div className="flex items-center gap-1.5 text-[10px] text-zinc-600 mb-2">
-                              <ExternalLink className="w-3 h-3" />
-                              <span className="truncate">{signalData.source}</span>
-                            </div>
-                          )}
-
-                          <span className="text-[10px] font-medium text-zinc-600 flex items-center gap-1.5">
-                            <Calendar className="w-3 h-3" />
-                            {formatDateTime(node.identifiedAt)}
-                          </span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <span className="text-[10px] font-medium text-zinc-600 flex items-center gap-1">
+                              <Calendar className="w-3 h-3" />
+                              {formatDateTime(node.identifiedAt)}
+                            </span>
+                            {typeof signalData.source === "string" && signalData.source.length > 0 && (
+                              <span className="text-[10px] text-zinc-600 flex items-center gap-1 truncate max-w-[200px]">
+                                <ExternalLink className="w-3 h-3 shrink-0" />
+                                {signalData.source}
+                              </span>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
-        </TabsContent>
+        </div>
 
-        {/* ── Dossier Tab ───────────────────────────────────────────────────── */}
-        <TabsContent value="dossier">
-          {!tree.dossier ? (
-            <Card className="rounded-2xl border-border">
-              <CardContent className="p-6">
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <div className="w-14 h-14 bg-zinc-800/50 rounded-full flex items-center justify-center mb-4">
-                    <BookOpen className="w-7 h-7 text-zinc-600" />
-                  </div>
-                  <p className="text-zinc-400 font-semibold text-sm">No dossier built yet.</p>
-                  <p className="text-zinc-600 text-xs mt-1.5 max-w-sm mb-6">
-                    Build a fact dossier to extract structured data, quotes, and a timeline from all signals in this tree.
-                  </p>
-                  <Button
-                    onClick={buildDossier}
-                    disabled={dossierBuilding}
-                    className="gap-2 bg-indigo-600 hover:bg-indigo-700 font-semibold shadow-lg shadow-indigo-900/20"
-                  >
-                    {dossierBuilding ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Sparkles className="w-4 h-4" />
-                    )}
-                    Build Dossier
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <DossierView dossier={tree.dossier} />
-          )}
-        </TabsContent>
+        {/* RIGHT COLUMN — The Outputs */}
+        <div className="space-y-6">
+          {/* Dossier Section */}
+          <div>
+            <h2 className="text-xs font-black text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <BookOpen className="w-4 h-4 text-emerald-400" />
+              Fact Dossier
+            </h2>
 
-        {/* ── Content Tab ───────────────────────────────────────────────────── */}
-        <TabsContent value="content">
-          {tree.contentPieces.length === 0 ? (
-            <Card className="rounded-2xl border-border">
-              <CardContent className="p-6">
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <div className="w-14 h-14 bg-zinc-800/50 rounded-full flex items-center justify-center mb-4">
-                    <FileText className="w-7 h-7 text-zinc-600" />
-                  </div>
-                  <p className="text-zinc-400 font-semibold text-sm">No content pieces linked to this tree.</p>
-                  <p className="text-zinc-600 text-xs mt-1.5 max-w-sm mb-6">
-                    Generate content from this narrative tree to create platform-specific deliverables.
-                  </p>
-                  <Button
-                    variant="outline"
-                    className="gap-2 border-zinc-700 text-zinc-400 hover:text-foreground"
-                    disabled
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    Generate Content
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-3">
-              {tree.contentPieces.map((piece) => (
-                <Card key={piece.id} className="rounded-2xl border-border card-hover group animate-fade-in">
-                  <CardContent className="p-5">
-                    <div className="flex items-start justify-between gap-3 mb-3">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Badge variant="secondary" className="text-xs font-bold bg-zinc-800 text-zinc-300 border-0">
-                          {piece.brand.name}
-                        </Badge>
-                        <Badge className={`text-[10px] font-bold uppercase tracking-wide border ${contentStatusColor(piece.status)}`}>
-                          {piece.status}
-                        </Badge>
-                        <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wide text-zinc-500 border-zinc-700">
-                          {formatPlatform(piece.platform)}
-                        </Badge>
-                      </div>
+            {!tree.dossier ? (
+              <Card className="rounded-2xl border-border">
+                <CardContent className="p-6">
+                  <div className="flex flex-col items-center justify-center py-10 text-center">
+                    <div className="w-12 h-12 bg-zinc-800/50 rounded-full flex items-center justify-center mb-3">
+                      <BookOpen className="w-6 h-6 text-zinc-600" />
                     </div>
-
-                    <p className="text-sm text-zinc-300 leading-relaxed line-clamp-3 mb-3">
-                      {piece.bodyText}
+                    <p className="text-zinc-400 font-semibold text-sm">No dossier built yet.</p>
+                    <p className="text-zinc-600 text-xs mt-1 mb-4 max-w-xs">
+                      Build a dossier to synthesize all signals into structured research.
                     </p>
-
-                    <div className="flex items-center gap-4 text-[10px] text-zinc-600">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />
-                        Created {formatDate(piece.createdAt)}
-                      </span>
-                      {piece.publishedAt && (
-                        <span className="flex items-center gap-1 text-emerald-500">
-                          <CheckCircle className="w-3 h-3" />
-                          Published {formatDate(piece.publishedAt)}
-                        </span>
+                    <Button
+                      onClick={buildDossier}
+                      disabled={dossierBuilding}
+                      size="sm"
+                      className="gap-2 bg-indigo-600 hover:bg-indigo-700 font-semibold shadow-lg shadow-indigo-900/20"
+                    >
+                      {dossierBuilding ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-3.5 h-3.5" />
                       )}
+                      Build Dossier
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <DossierView dossier={tree.dossier} />
+            )}
+          </div>
+
+          {/* Content Pieces Section */}
+          <div>
+            <h2 className="text-xs font-black text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-blue-400" />
+              Content Pieces ({tree.contentPieces.length})
+            </h2>
+
+            {tree.contentPieces.length === 0 ? (
+              <Card className="rounded-2xl border-border">
+                <CardContent className="p-6">
+                  <div className="flex flex-col items-center justify-center py-10 text-center">
+                    <div className="w-12 h-12 bg-zinc-800/50 rounded-full flex items-center justify-center mb-3">
+                      <FileText className="w-6 h-6 text-zinc-600" />
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
+                    <p className="text-zinc-400 font-semibold text-sm">No content generated yet.</p>
+                    <p className="text-zinc-600 text-xs mt-1 max-w-xs">
+                      Content pieces will appear here once the pipeline produces deliverables.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {tree.contentPieces.map((piece) => {
+                  // Parse visual prompts to show nano banana angles
+                  let nanoBananaAngles: { type: string; text: string }[] = [];
+                  if (piece.visualPrompts) {
+                    try {
+                      const vp = JSON.parse(piece.visualPrompts);
+                      if (Array.isArray(vp.nanoBananaAngles)) {
+                        nanoBananaAngles = vp.nanoBananaAngles;
+                      }
+                    } catch { /* ignore parse errors */ }
+                  }
+
+                  return (
+                    <Card key={piece.id} className="rounded-2xl border-border card-hover group animate-fade-in">
+                      <CardContent className="p-5">
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge variant="secondary" className="text-xs font-bold bg-zinc-800 text-zinc-300 border-0">
+                              {piece.brand.name}
+                            </Badge>
+                            <Badge className={`text-[10px] font-bold uppercase tracking-wide border ${contentStatusColor(piece.status)}`}>
+                              {piece.status}
+                            </Badge>
+                            <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wide text-zinc-500 border-zinc-700">
+                              {formatPlatform(piece.platform)}
+                            </Badge>
+                          </div>
+                        </div>
+
+                        <p className="text-sm text-zinc-300 leading-relaxed line-clamp-3 mb-3">
+                          {piece.bodyText}
+                        </p>
+
+                        {/* Nano Banana Angles */}
+                        {nanoBananaAngles.length > 0 && (
+                          <div className="mb-3">
+                            <div className="text-[10px] font-bold text-amber-500 uppercase tracking-wider mb-2">
+                              Nano Banana Angles
+                            </div>
+                            <div className="space-y-1.5">
+                              {nanoBananaAngles.map((angle, i) => (
+                                <div key={i} className="flex items-start gap-2 text-xs bg-amber-500/5 rounded-lg px-3 py-2 border border-amber-500/10">
+                                  <Badge variant="outline" className="text-[9px] font-bold border-amber-500/20 text-amber-400 shrink-0 mt-0.5">
+                                    {angle.type}
+                                  </Badge>
+                                  <span className="text-zinc-300">{angle.text}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-4 text-[10px] text-zinc-600">
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            Created {formatDate(piece.createdAt)}
+                          </span>
+                          {piece.publishedAt && (
+                            <span className="flex items-center gap-1 text-emerald-500">
+                              <CheckCircle className="w-3 h-3" />
+                              Published {formatDate(piece.publishedAt)}
+                            </span>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

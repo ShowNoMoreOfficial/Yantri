@@ -1,73 +1,41 @@
-import { createHash } from "crypto";
+import { GoogleGenAI } from "@google/genai";
 
 /**
- * Embedding dimensions — matches the pgvector column definition in schema.prisma.
+ * Embedding module — real Gemini embeddings + shared similarity utilities.
+ *
+ * Uses Gemini text-embedding-004 for semantic vector generation.
+ * Exports cosine similarity and tree matching functions used by both
+ * the ingest API and the content pipeline.
  */
-const EMBEDDING_DIMS = 1536;
 
-/**
- * Generate an embedding vector for the given text.
- *
- * TODO: Replace the placeholder implementation with a real embedding API call.
- * When ready, swap the body of this function to call Gemini's embedding endpoint:
- *
- *   const { GoogleGenAI } = await import("@google/genai");
- *   const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
- *   const result = await genAI.models.embedContent({
- *     model: "text-embedding-004",
- *     contents: text,
- *   });
- *   return result.embeddings[0].values;
- *
- * The current implementation generates a deterministic fake 1536-dim vector
- * derived from the SHA-256 hash of the input text. This ensures:
- *   - Identical inputs always produce identical vectors
- *   - Different inputs produce different (but not semantically meaningful) vectors
- *   - The output shape matches what pgvector expects
- *
- * @param text - The text to embed
- * @returns A 1536-dimensional vector of floats in the range [-1, 1]
- */
-export async function generateEmbedding(text: string): Promise<number[]> {
-  return generateFakeEmbedding(text);
+const SIMILARITY_THRESHOLD = 0.85;
+
+let genAIInstance: GoogleGenAI | null = null;
+
+function getGenAI(): GoogleGenAI {
+  if (!genAIInstance) {
+    genAIInstance = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+  }
+  return genAIInstance;
 }
 
 /**
- * Deterministic fake embedding generator.
+ * Generate an embedding vector for the given text using Gemini text-embedding-004.
  *
- * Uses SHA-256 to produce a repeatable hash, then expands it into a
- * 1536-dimensional vector by iteratively hashing with an index suffix.
- * Each pair of hash bytes is converted to a float in [-1, 1].
+ * @param text - The text to embed
+ * @returns A 768-dimensional vector of floats
  */
-function generateFakeEmbedding(text: string): number[] {
-  const embedding: number[] = [];
-  const normalizedText = text.toLowerCase().trim();
-
-  // We need 1536 floats. Each SHA-256 hash gives us 32 bytes = 16 float pairs.
-  // So we need ceil(1536 / 16) = 96 hash rounds.
-  const roundsNeeded = Math.ceil(EMBEDDING_DIMS / 16);
-
-  for (let round = 0; round < roundsNeeded; round++) {
-    const hash = createHash("sha256")
-      .update(`${normalizedText}::${round}`)
-      .digest();
-
-    // Extract 16 floats from each 32-byte hash (2 bytes per float)
-    for (let i = 0; i < 32 && embedding.length < EMBEDDING_DIMS; i += 2) {
-      // Combine two bytes into a 16-bit unsigned int, then normalize to [-1, 1]
-      const value = ((hash[i] << 8) | hash[i + 1]) / 32767.5 - 1;
-      embedding.push(value);
-    }
+export async function generateEmbedding(text: string): Promise<number[]> {
+  const genAI = getGenAI();
+  const result = await genAI.models.embedContent({
+    model: "text-embedding-004",
+    contents: text,
+  });
+  const values = result.embeddings?.[0]?.values;
+  if (!values || values.length === 0) {
+    throw new Error("Gemini embedding returned empty values");
   }
-
-  // L2-normalize the vector so cosine similarity works correctly
-  const magnitude = Math.sqrt(
-    embedding.reduce((sum, val) => sum + val * val, 0)
-  );
-
-  if (magnitude === 0) return embedding;
-
-  return embedding.map((val) => val / magnitude);
+  return values;
 }
 
 /**
@@ -80,4 +48,60 @@ function generateFakeEmbedding(text: string): number[] {
  */
 export function toPgVector(embedding: number[]): string {
   return `[${embedding.join(",")}]`;
+}
+
+// ─── Shared Similarity Utilities ─────────────────────────────────────────────
+
+/** Cosine similarity between two vectors */
+export function cosineSimilarity(a: number[], b: number[]): number {
+  if (a.length !== b.length) return 0;
+  let dot = 0, magA = 0, magB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    magA += a[i] * a[i];
+    magB += b[i] * b[i];
+  }
+  const denom = Math.sqrt(magA) * Math.sqrt(magB);
+  return denom === 0 ? 0 : dot / denom;
+}
+
+export interface SimilarTreeResult {
+  id: string;
+  rootTrend: string;
+  similarity: number;
+}
+
+/**
+ * Find the most semantically similar active NarrativeTree.
+ * Loads all active tree embeddings and compares in-memory using cosine similarity.
+ */
+export async function findSimilarTree(
+  embedding: number[],
+  // Accept any Prisma-like client that has narrativeTree.findMany
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  prismaClient: any,
+  threshold: number = SIMILARITY_THRESHOLD
+): Promise<SimilarTreeResult | null> {
+  const trees = await prismaClient.narrativeTree.findMany({
+    where: { embedding: { not: null }, status: "ACTIVE" },
+    select: { id: true, rootTrend: true, embedding: true },
+  });
+
+  let best: SimilarTreeResult | null = null;
+
+  for (const tree of trees) {
+    if (!tree.embedding) continue;
+    try {
+      const treeEmbedding: number[] = JSON.parse(tree.embedding);
+      if (!Array.isArray(treeEmbedding) || treeEmbedding.length !== embedding.length) continue;
+      const sim = cosineSimilarity(embedding, treeEmbedding);
+      if (sim > threshold && (!best || sim > best.similarity)) {
+        best = { id: tree.id, rootTrend: tree.rootTrend, similarity: sim };
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return best;
 }

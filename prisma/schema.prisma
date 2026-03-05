@@ -49,15 +49,16 @@ model Brand {
 // ─── Narrative Trees (Semantic Memory) ──────────────────────────────────────
 
 model NarrativeTree {
-  id         String                      @id @default(cuid())
-  rootTrend  String                      // Primary signal title
-  summary    String?         @db.Text    // AI-generated tree summary
-  embedding  String?       @db.Text    // Serialized embedding vector (JSON array of floats)
-  status     NarrativeTreeStatus         @default(ACTIVE)
-  nodes      NarrativeNode[]
-  dossier    FactDossier?
-  createdAt  DateTime                    @default(now())
-  updatedAt  DateTime                    @updatedAt
+  id            String                      @id @default(cuid())
+  rootTrend     String                      // Primary signal title
+  summary       String?         @db.Text    // AI-generated tree summary
+  embedding     String?       @db.Text    // Serialized embedding vector (JSON array of floats)
+  status        NarrativeTreeStatus         @default(ACTIVE)
+  nodes         NarrativeNode[]
+  dossier       FactDossier?
+  contentPieces ContentPiece[]
+  createdAt     DateTime                    @default(now())
+  updatedAt     DateTime                    @updatedAt
 }
 
 enum NarrativeTreeStatus {
@@ -96,6 +97,7 @@ model ContentPiece {
   brandId       String
   brand         Brand         @relation(fields: [brandId], references: [id])
   treeId        String?       // Optional link to NarrativeTree
+  tree          NarrativeTree? @relation(fields: [treeId], references: [id])
   platform      Platform
   status        ContentStatus @default(PLANNED)
   bodyText      String        @db.Text

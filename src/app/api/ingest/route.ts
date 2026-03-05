@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { generateEmbedding } from "@/lib/embeddings";
+import { generateEmbedding, findSimilarTree } from "@/lib/embeddings";
 import { inngest } from "@/lib/inngest/client";
 
 // ─── Request / Response Types ────────────────────────────────────────────────
@@ -67,58 +67,8 @@ function validateSignal(
   };
 }
 
-// ─── Semantic Similarity (Application-Level) ─────────────────────────────────
-
-interface SimilarTreeResult {
-  id: string;
-  rootTrend: string;
-  similarity: number;
-}
-
-const SIMILARITY_THRESHOLD = 0.9;
-
-/** Cosine similarity between two vectors */
-function cosineSimilarity(a: number[], b: number[]): number {
-  let dot = 0, magA = 0, magB = 0;
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i];
-    magA += a[i] * a[i];
-    magB += b[i] * b[i];
-  }
-  const denom = Math.sqrt(magA) * Math.sqrt(magB);
-  return denom === 0 ? 0 : dot / denom;
-}
-
-/**
- * Find the most semantically similar NarrativeTree using application-level cosine similarity.
- * Loads all tree embeddings and compares in-memory. For production, swap to pgvector.
- */
-async function findSimilarTree(
-  embedding: number[]
-): Promise<SimilarTreeResult | null> {
-  const trees = await prisma.narrativeTree.findMany({
-    where: { embedding: { not: null } },
-    select: { id: true, rootTrend: true, embedding: true },
-  });
-
-  let best: SimilarTreeResult | null = null;
-
-  for (const tree of trees) {
-    if (!tree.embedding) continue;
-    try {
-      const treeEmbedding: number[] = JSON.parse(tree.embedding);
-      if (!Array.isArray(treeEmbedding) || treeEmbedding.length !== embedding.length) continue;
-      const sim = cosineSimilarity(embedding, treeEmbedding);
-      if (sim > SIMILARITY_THRESHOLD && (!best || sim > best.similarity)) {
-        best = { id: tree.id, rootTrend: tree.rootTrend, similarity: sim };
-      }
-    } catch {
-      continue;
-    }
-  }
-
-  return best;
-}
+// ─── Semantic Similarity ─────────────────────────────────────────────────────
+// Uses shared findSimilarTree from @/lib/embeddings
 
 // ─── Main Handler ────────────────────────────────────────────────────────────
 
@@ -182,7 +132,7 @@ export async function POST(request: Request) {
         const embedding = await generateEmbedding(textToEmbed);
 
         // Check for semantically similar existing trees
-        const similarTree = await findSimilarTree(embedding);
+        const similarTree = await findSimilarTree(embedding, prisma);
 
         if (similarTree) {
           // Append as a new node to the existing tree

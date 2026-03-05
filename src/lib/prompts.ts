@@ -301,7 +301,7 @@ OUTPUT FORMAT (respond in JSON only, no other text):
 
 function normalizePlatform(platform: string): string {
   const p = platform.toLowerCase();
-  if (p.includes("twitter") || p.includes("x_thread") || p === "x") return "twitter";
+  if (p.includes("twitter") || p.includes("x_thread") || p.includes("x_single") || p === "x") return "twitter";
   if (p.includes("youtube") || p.includes("yt")) return "youtube";
   if (p.includes("blog") || p.includes("article") || p.includes("website")) return "blog";
   if (p.includes("meta") || p.includes("instagram") || p.includes("reel") || p.includes("carousel")) return "meta";
@@ -333,16 +333,18 @@ ${params.researchResults}`;
 }
 
 function buildTwitterPrompt(ctx: string): { systemPrompt: string; userMessage: string } {
-  const systemPrompt = `You are the Squirrels X Engine — a Twitter/X thread writer for a data-driven news brand. You produce complete, publish-ready threads. Not prompts, not outlines — ACTUAL TWEETS ready to post.
+  const systemPrompt = `You are the Squirrels X Engine — a Twitter/X content creator for a data-driven news brand. You produce complete, publish-ready content. Not prompts, not outlines — ACTUAL TWEETS ready to post.
 
 ${ctx}
 
-THREAD CONSTRUCTION RULES:
+FORMAT DECISION (make this choice FIRST):
+Assess the research dossier depth and the narrative complexity:
+- SINGLE TWEET ("single_tweet"): If the trend is a minor update, quick observation, breaking one-liner, or can be communicated with a single powerful data point.
+- THREAD ("thread"): If the trend requires deep context, step-by-step explanation, multiple data points, or storytelling.
 
-HOOK TWEET (position 1):
-- Contains ONE idea only. Do not summarize the thread argument. Do not front-load the conclusion.
-- Creates tension that makes the reader need tweet 2.
-- Uses exactly one of these archetypes:
+Set the "format" field to "single_tweet" or "thread" based on your assessment.
+
+HOOK ARCHETYPES (used by both formats):
   * The Number That Should Not Exist
   * The Contradiction
   * The Question Nobody Is Asking
@@ -351,6 +353,19 @@ HOOK TWEET (position 1):
   * The Scale Translation
   * The Uncomfortable Comparison
   * The Source Authority
+
+─── SINGLE TWEET RULES (if format = "single_tweet") ───
+- Maximum 280 characters. No exceptions.
+- Must contain ONE powerful hook using one of the archetypes above.
+- Every data point must cite its source inline (e.g., "per Reuters", "according to MoF").
+- Must be self-contained — the reader needs nothing else to understand the point.
+
+─── THREAD RULES (if format = "thread") ───
+
+HOOK TWEET (position 1):
+- Contains ONE idea only. Do not summarize the thread argument. Do not front-load the conclusion.
+- Creates tension that makes the reader need tweet 2.
+- Uses exactly one of the archetypes above.
 - Must be ≤ 280 characters.
 
 DATA TWEETS:
@@ -370,27 +385,47 @@ QUOTE TWEETS:
 
 CLOSING TWEET (final position):
 - Must be a forward-looking question or implication. Never a conclusion or summary.
-- The reader should finish the thread with a question in their mind, not an answer.
 - Never use: "Follow us", "Retweet this", "Share if you agree", or any generic CTA.
 - The question must be specific to this story, not generic geopolitics.
 
-THREAD LENGTH: 6-9 tweets. Calibrate to research depth. Do not pad.
+THREAD LENGTH: 3-5 tweets. Calibrate to research depth. Do not pad.
 
 HASHTAG RULE: Zero hashtags in tweet text. All hashtags go in postingPlan only.
 
 NANO BANANA IMAGE PROMPTS:
-For every tweet where an image adds genuine value (DATA and CONTEXT tweets primarily), include a nano_banana_prompt. This is a text prompt sent to an image generation model.
+For tweets where an image adds genuine value, include a nano_banana_prompt — a text prompt for an image generation model.
+- DATA tweets: Request a data visualization card. Specify: chart type, data points, color mood (dark editorial palette — deep navy, charcoal, sharp white text, accent in amber or red), brand aesthetic (clean, precise, authoritative).
+- CONTEXT tweets: Request an editorial card with key phrase/stat as text overlay, dark background, bold sans-serif headline.
+- HOOK/SINGLE tweet: Only if a map or single-stat card dramatically increases stop-scroll probability.
+- Do NOT generate nano_banana_prompt for quote-only tweets or the closing tweet.
+- Format: plain English, 50-100 words, specific enough that the image model needs no clarification.
 
-Rules for nano_banana_prompt:
-- DATA tweets: Request a data visualization card. Specify: chart type, exact data points to display, axis labels, color mood (dark editorial palette — deep navy, charcoal, sharp white text, single accent color in amber or red), and brand aesthetic (clean, no decorative clutter, precise and authoritative).
-- CONTEXT/QUOTE tweets: Request an editorial card. Specify: the key phrase or stat to display as text overlay, background mood (abstract dark texture or minimal geometric), typographic style (bold sans-serif headline, small attribution line), color palette consistent with DATA tweets.
-- HOOK tweet: Only include if a map or single-stat card would dramatically increase stop-scroll probability.
-- Do NOT generate nano_banana_prompt for quote tweets that use only text, or for the closing tweet.
-- Format: plain English description, 50-100 words, specific enough that the image model needs no clarification.
+─── OUTPUT FORMAT ───
 
-OUTPUT FORMAT (respond in JSON only, no preamble, no markdown backticks):
+If format is "single_tweet" (respond in JSON only, no preamble, no markdown backticks):
 {
   "platform": "twitter",
+  "format": "single_tweet",
+  "brand": "Brand Name",
+  "narrative_angle": "...",
+  "content": {
+    "tweet": "Full tweet text here",
+    "character_count": 241,
+    "hook_archetype": "The Question Nobody Is Asking",
+    "nano_banana_prompt": "50-100 word image generation prompt, or null if no image needed"
+  },
+  "postingPlan": {
+    "time_ist": "8:30 PM IST",
+    "time_reasoning": "Why this time maximises reach for this specific audience and topic",
+    "hashtags": ["#tag1"],
+    "engagement_strategy": "How to maximize engagement: reply strategy, quote-tweet bait, timing of follow-up"
+  }
+}
+
+If format is "thread" (respond in JSON only, no preamble, no markdown backticks):
+{
+  "platform": "twitter",
+  "format": "thread",
   "brand": "Brand Name",
   "narrative_angle": "...",
   "content": {
@@ -401,23 +436,24 @@ OUTPUT FORMAT (respond in JSON only, no preamble, no markdown backticks):
         "character_count": 241,
         "type": "hook | data | context | quote | cta",
         "hook_archetype": "The Question Nobody Is Asking",
-        "nano_banana_prompt": "Optional. Only include if image adds genuine value. 50-100 word image generation prompt."
+        "nano_banana_prompt": "Optional. Only include if image adds genuine value."
       }
     ],
-    "thread_length": 7,
+    "thread_length": 4,
     "source_replies": [
       {
         "reply_to_position": 2,
-        "text": "Source reply text citing the data sources used in tweet 2. Include URLs where available."
+        "text": "Source reply citing the data sources used. Include URLs where available."
       }
     ],
-    "pinned_reply": "Text for a pinned reply summarizing the thread's core finding in 1-2 sentences. This is what people see when they click the thread without reading it."
+    "pinned_reply": "1-2 sentence summary of the thread's core finding."
   },
   "postingPlan": {
     "time_ist": "8:30 PM IST",
     "time_reasoning": "Why this time maximises reach for this specific audience and topic",
     "hashtags": ["#tag1"],
     "hashtag_note": "Maximum one hashtag, only if topic is actively trending. Otherwise leave array empty.",
+    "thread_pacing": "Timing between tweet posts",
     "engagement_playbook": {
       "likely_reply_1": {
         "type": "Challenge / Agreement / Misread",
@@ -433,9 +469,9 @@ OUTPUT FORMAT (respond in JSON only, no preamble, no markdown backticks):
   }
 }
 
-CRITICAL: Before responding, verify your output is valid JSON. character_count must reflect the actual character count of each tweet text. Field names are case-sensitive. Do not add, rename, or omit any field.`;
+CRITICAL: Before responding, verify your output is valid JSON. character_count must reflect the actual character count of tweet text. Field names are case-sensitive. Do not add, rename, or omit any field from the chosen format.`;
 
-  return { systemPrompt, userMessage: "Generate the complete Twitter thread and posting plan now." };
+  return { systemPrompt, userMessage: "Assess the research depth, choose the optimal format (single_tweet or thread), then generate the complete Twitter content and posting plan." };
 }
 
 function buildYouTubePrompt(ctx: string): { systemPrompt: string; userMessage: string } {
@@ -670,7 +706,7 @@ export function getPlatformDeliverableDescription(platform: string): string[] {
   const normalized = normalizePlatform(platform);
   switch (normalized) {
     case "twitter":
-      return ["Complete thread with hook, data tweets, and CTA", "Optimal posting time and strategy", "Hashtag recommendations"];
+      return ["Single tweet or thread (3-5 tweets) based on narrative depth", "Optimal posting time and engagement strategy", "Hashtag recommendations"];
     case "youtube":
       return ["Full video script with production cues", "Three title options with thumbnail brief", "SEO description, tags, and posting time"];
     case "blog":

@@ -15,6 +15,7 @@ import { routeToModel } from "@/lib/modelRouter";
 import { runContentEngine, type ContentEngineParams } from "@/lib/engines";
 import { runPackagingEngine, type PackagingEngineParams } from "@/lib/engines";
 import { generateVisualPrompts, type VisualPromptParams } from "@/lib/engines/nanoBanana";
+import { generateEmbedding, findSimilarTree } from "@/lib/embeddings";
 
 // ─── Event Type ──────────────────────────────────────────────────────────────
 
@@ -43,16 +44,89 @@ export const contentPipeline = inngest.createFunction(
       return cp;
     });
 
+    // ── Step 1.5: Auto-cluster into NarrativeTree ─────────────────────────
+    // If the piece has no treeId, generate an embedding for its angle and
+    // check for a semantically similar active NarrativeTree. If found,
+    // attach as a NarrativeNode. If not, create a new tree. Link the piece.
+
+    const effectiveTreeId = await step.run("cluster-into-tree", async () => {
+      if (piece.treeId) return piece.treeId;
+
+      const angleText = piece.bodyText.slice(0, 1000);
+      const embedding = await generateEmbedding(angleText);
+      const similarTree = await findSimilarTree(embedding, prisma);
+
+      if (similarTree) {
+        // Attach as a new NarrativeNode to the existing tree
+        await prisma.narrativeNode.create({
+          data: {
+            treeId: similarTree.id,
+            signalTitle: angleText.slice(0, 150),
+            signalScore: 0,
+            signalData: {
+              source: "content-pipeline",
+              angle: angleText,
+              platform: piece.platform,
+              brandId: piece.brandId,
+            },
+          },
+        });
+
+        // Update tree timestamp
+        await prisma.narrativeTree.update({
+          where: { id: similarTree.id },
+          data: { updatedAt: new Date() },
+        });
+
+        // Link the content piece to this tree
+        await prisma.contentPiece.update({
+          where: { id: contentPieceId },
+          data: { treeId: similarTree.id },
+        });
+
+        return similarTree.id;
+      }
+
+      // No match — create a new NarrativeTree
+      const newTree = await prisma.narrativeTree.create({
+        data: {
+          rootTrend: angleText.slice(0, 200),
+          summary: `Auto-clustered from content pipeline: ${piece.platform}`,
+          embedding: JSON.stringify(embedding),
+          nodes: {
+            create: {
+              signalTitle: angleText.slice(0, 150),
+              signalScore: 0,
+              signalData: {
+                source: "content-pipeline",
+                angle: angleText,
+                platform: piece.platform,
+                brandId: piece.brandId,
+              },
+            },
+          },
+        },
+      });
+
+      // Link the content piece to the new tree
+      await prisma.contentPiece.update({
+        where: { id: contentPieceId },
+        data: { treeId: newTree.id },
+      });
+
+      return newTree.id;
+    });
+
     // ── Step 2: Research ───────────────────────────────────────────────────
     // If the piece is linked to a NarrativeTree, use its FactDossier.
     // If no dossier exists yet, invoke the dossier builder and wait.
     // If no treeId at all, do a quick inline research via the model router.
 
     const researchText = await step.run("research", async () => {
-      if (piece.treeId) {
+      if (effectiveTreeId) {
         // Try to fetch an existing FactDossier for this tree
         const dossier = await prisma.factDossier.findUnique({
-          where: { treeId: piece.treeId },
+          where: { treeId: effectiveTreeId },
         });
 
         if (dossier) {
@@ -88,22 +162,22 @@ Provide structured research covering: key facts, critical numbers, stakeholder p
 
     // If researchText is null, we need to build the dossier first
     let finalResearch = researchText;
-    if (finalResearch === null && piece.treeId) {
+    if (finalResearch === null && effectiveTreeId) {
       // Invoke the dossier builder and wait for it to complete
       await step.invoke("build-dossier", {
         function: "fact-dossier-sync",
-        data: { treeId: piece.treeId },
+        data: { treeId: effectiveTreeId },
       });
 
       // Now fetch the freshly built dossier
       finalResearch = await step.run("fetch-built-dossier", async () => {
         const dossier = await prisma.factDossier.findUnique({
-          where: { treeId: piece.treeId! },
+          where: { treeId: effectiveTreeId },
         });
 
         if (!dossier) {
           throw new Error(
-            `Dossier build completed but no dossier found for tree ${piece.treeId}`
+            `Dossier build completed but no dossier found for tree ${effectiveTreeId}`
           );
         }
 
@@ -168,6 +242,7 @@ Provide structured research covering: key facts, critical numbers, stakeholder p
         brandName: piece.brand.name,
         emotion: (thumbnail?.emotion as string) ?? "curiosity",
         colorMood: (thumbnail?.color_mood as string) ?? "bold, high contrast",
+        generatedContent: contentResult.raw,
       };
 
       const visualResult = await generateVisualPrompts(visualParams);
@@ -179,6 +254,7 @@ Provide structured research covering: key facts, critical numbers, stakeholder p
             thumbnailPrompt: visualResult.thumbnailPrompt,
             socialCardPrompt: visualResult.socialCardPrompt,
             storyPrompt: visualResult.storyPrompt ?? null,
+            nanoBananaAngles: visualResult.nanoBananaAngles,
           }),
         },
       });

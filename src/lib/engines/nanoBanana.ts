@@ -20,12 +20,19 @@ export interface VisualPromptParams {
   brandName: string;
   emotion: string;
   colorMood: string;
+  generatedContent?: string; // The drafted tweet/thread/content from the content engine
+}
+
+export interface NanoBananaAngle {
+  type: "contrarian" | "data_bomb" | "question";
+  text: string;
 }
 
 export interface VisualPromptResult {
   thumbnailPrompt: string;
   socialCardPrompt: string;
   storyPrompt?: string;
+  nanoBananaAngles: NanoBananaAngle[];
   model: string;
   raw: string;
 }
@@ -107,16 +114,20 @@ function buildVisualSystemPrompt(
   params: VisualPromptParams,
   specs: ReturnType<typeof getPlatformSpecs>
 ): string {
-  return `You are Nano Banana — the visual prompt architect for ${params.brandName}. You generate highly detailed, production-ready text prompts for AI image generators and design briefs.
+  const contentBlock = params.generatedContent
+    ? `\nDRAFTED CONTENT (the tweet/thread/post this visual will accompany):\n${params.generatedContent.slice(0, 3000)}\n`
+    : "";
 
-You do NOT generate images. You generate the PROMPT TEXT that a designer or AI tool will use.
+  return `You are Nano Banana — the visual prompt architect and engagement strategist for ${params.brandName}. You generate highly detailed, production-ready text prompts for AI image generators AND high-engagement "nano banana" angles.
+
+You do NOT generate images. You generate the PROMPT TEXT that a designer or AI tool will use, PLUS provocative engagement angles tied to the drafted content.
 
 NARRATIVE ANGLE: ${params.narrativeAngle}
 PLATFORM: ${params.platform}
 BRAND: ${params.brandName}
 DESIRED EMOTION: ${params.emotion}
 COLOR MOOD: ${params.colorMood}
-
+${contentBlock}
 PLATFORM SPECS:
 - Thumbnail ratio: ${specs.thumbnailRatio}
 - Social card ratio: ${specs.socialCardRatio}
@@ -134,13 +145,25 @@ For EACH visual prompt you generate, include ALL of the following structural ele
 7. TEXT OVERLAY PLACEMENT: Where headline text should sit, font weight suggestion, contrast zone
 8. EMOTIONAL REGISTER: The specific feeling the image should evoke in the viewer
 
+NANO BANANA ENGAGEMENT ANGLES:
+Given the factual dossier AND the drafted social post, generate 3 provocative, counter-narrative, or high-engagement "nano banana" angles. Each angle is a ready-to-use tweet/post that a creator could use to quote-tweet, reply to, or riff on the main post.
+- Angle 1: THE CONTRARIAN — Flip the narrative. What's the uncomfortable counter-argument or overlooked perspective?
+- Angle 2: THE DATA BOMB — What single statistic or fact from the dossier would stop someone mid-scroll if presented in isolation?
+- Angle 3: THE QUESTION — What provocative question does this content raise that nobody is asking?
+Each angle must be under 280 characters, standalone, and immediately engaging without context.
+
 OUTPUT FORMAT (respond in JSON only):
 {
   "thumbnailPrompt": "Complete structural prompt for the thumbnail image...",
   "socialCardPrompt": "Complete structural prompt for the social card...",
   ${specs.hasStory ? '"storyPrompt": "Complete structural prompt for the story frame...",' : '"storyPrompt": null,'}
   "colorPalette": ["#hex1", "#hex2", "#hex3"],
-  "emotionNote": "Brief note on the emotional throughline connecting all visuals"
+  "emotionNote": "Brief note on the emotional throughline connecting all visuals",
+  "nanoBananaAngles": [
+    { "type": "contrarian", "text": "Ready-to-post contrarian angle under 280 chars" },
+    { "type": "data_bomb", "text": "Ready-to-post data bomb angle under 280 chars" },
+    { "type": "question", "text": "Ready-to-post provocative question under 280 chars" }
+  ]
 }`;
 }
 
@@ -195,6 +218,7 @@ export async function generateVisualPrompts(
     thumbnailPrompt: (parsed.thumbnailPrompt as string) ?? "",
     socialCardPrompt: (parsed.socialCardPrompt as string) ?? "",
     storyPrompt: (parsed.storyPrompt as string) ?? undefined,
+    nanoBananaAngles: (parsed.nanoBananaAngles as NanoBananaAngle[]) ?? [],
     model: result.model,
     raw: result.raw,
   };
