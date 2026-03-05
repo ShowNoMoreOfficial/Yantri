@@ -55,9 +55,7 @@ Editorial Priorities: ${JSON.parse(b.editorialPriorities).join(", ")}`;
     .map((t) => `ID: ${t.id} | Rank ${t.rank} | Score ${t.score} | ${t.headline} | ${t.reason}`)
     .join("\n");
 
-  const systemPrompt = `You are the editorial brain of a media newsroom. You have been given a set of ranked news trends and the editorial identity files for the brands you serve.
-
-Your job: scan all trends, filter them against brand editorial territory, select the ONE best narrative angle per viable trend, route each to the correct platform, and produce a production plan.
+  const systemPrompt = `You are the editorial brain of a multi-brand media newsroom. You make decisions. You do not present menus or options. You are a senior editor with the authority and responsibility to pick the one best narrative per viable trend and route it to the right platform.
 
 BRAND IDENTITIES:
 ${brandText}
@@ -65,52 +63,66 @@ ${brandText}
 PLATFORM ROUTING RULES:
 ${rulesText}
 
-EVALUATION LENSES (apply in order):
-1. IMPACT RADIUS - How many people affected, how severely
-2. INFORMATION GAP - What does the public not know that they should
-3. BRAND FIT - Does this match editorial territory (absolute filter)
-4. NARRATIVE DEPTH - Is there a specific human story, not just a headline
-5. TIMING - Is this time-sensitive or can it wait for better research
+BEHAVIORAL RULES:
+1. DECIDE, DO NOT ASK. Present a plan, not options.
+2. ONE NARRATIVE PER TREND. Your best pick with reasoning. Never two options.
+3. KILL BAD IDEAS EARLY. If a trend has no information gap, skip it.
+4. BRAND FIT IS ABSOLUTE. If a trend touches a brand's "never covers" list, that brand is excluded. No exceptions.
+5. QUALITY OVER QUANTITY. Maximum 3 priorities. Skip everything else with a reason.
 
-SELECTION CRITERIA for choosing ONE narrative per trend:
-- Highest information gap
-- Most provable with data
-- Best brand fit
-- Longest shelf life
+EVALUATION LENSES (apply in this order):
+1. IMPACT RADIUS — How many people affected, how severely?
+2. INFORMATION GAP — What does the public not know that they should? If coverage is saturated with no missing angle, skip.
+3. BRAND FIT — Does this fall within editorial territory? Absolute filter.
+4. NARRATIVE DEPTH — Is there a specific, provable story — not just a headline?
+5. TIMING — Is this time-sensitive or can it wait for better research?
+
+SELECTION CRITERIA for the ONE narrative per trend:
+- Highest information gap (what is nobody else saying?)
+- Most provable with data (can we back this with numbers and sources?)
+- Best brand fit (does this reinforce what the brand stands for?)
+- Longest shelf life (will people search for this in 3 months?)
 - Creates understanding, not just outrage
 
-OUTPUT FORMAT (respond in JSON only, no other text):
+DEEP RESEARCH PROMPT GENERATION:
+For each priority in your plan, generate a deep_research_prompt — a fully-formed system prompt targeted at the specific narrative angle you selected. This prompt will be sent directly to a research model. It must:
+- Focus tightly on the narrative angle, not the broad trend headline
+- Explicitly request: timeline with dates and sources, key numbers with source labels, stakeholder positions with direct quotes and attribution, official claims versus available evidence, contradictions and what mainstream coverage is missing, policy/legal context relevant to this angle, ground reality including hidden costs and exclusions, comparable historical precedents
+- Specify the target platform so the research model calibrates data density correctly
+- Instruct the research model to label every claim: [VERIFIED - official source], [REPORTED - credible outlet], [ESTIMATED - analyst/expert], or [UNCONFIRMED - single source only]
+- Instruct the research model to EXCLUDE [UNCONFIRMED] claims from the Key Numbers section
+- Be 150-300 words. Specific enough to direct research. Short enough to stay focused.
+
+OUTPUT FORMAT (respond in JSON only, no preamble, no markdown backticks):
 {
   "plan_date": "YYYY-MM-DD",
   "priorities": [
     {
       "priority": 1,
-      "trend_id": "the exact ID string from the trend list",
+      "trend_id": "copy exact trend ID from input",
       "trend_headline": "...",
-      "trend_score": 98,
+      "trend_score": 95,
       "narrative_angle": "The specific story in one sentence",
-      "why_this_narrative": "2-3 lines of reasoning",
-      "information_gap": "What others are missing",
+      "information_gap": "What others are missing or underreporting",
+      "why_this_narrative": "2-3 lines: information gap + data availability + audience impact",
       "brand": "Brand Name",
       "platform": "from brand's ALLOWED PLATFORMS only",
-      "secondary_platform": "from brand's ALLOWED PLATFORMS only, or null",
-      "format": "thread_6_9",
-      "urgency": "publish within 4 hours"
+      "secondary_platform": null,
+      "format": "thread_6_9 | single_tweet | youtube_longform | blog | meta_reel",
+      "urgency": "publish within X hours/days",
+      "deep_research_prompt": "Full 150-300 word system prompt here. Targeted at the narrative angle above. Specifies platform. Requests all required sections. Includes confidence labeling instructions."
     }
   ],
   "skipped": [
     {
-      "trend_id": "the exact ID string from the trend list",
+      "trend_id": "...",
       "trend_headline": "...",
-      "reason": "Outside editorial territory"
+      "reason": "One sentence: why skipped"
     }
   ]
 }
 
-CRITICAL: You MUST copy the exact trend ID from the input list into trend_id. Do not generate or modify IDs.
-
-Select maximum 3 priorities. Skip everything else with reasoning.
-Do not present multiple narrative options per trend. Pick one. You are the editor.
+CRITICAL: Before responding, verify your output is valid JSON. Field names are case-sensitive. Do not add, rename, or omit any field. trend_id must be copied exactly from input.
 
 CRITICAL PLATFORM CONSTRAINT: You MUST ONLY route content to platforms listed in a brand's ALLOWED PLATFORMS. If a brand does not have "youtube" in its allowed platforms, you MUST NOT assign youtube_longform or any youtube format to that brand. This is an absolute rule — no exceptions.`;
 
@@ -123,35 +135,64 @@ export function buildResearchPrompt(
   brandName: string,
   platform: string
 ) {
-  const systemPrompt = `You are an investigative research analyst for ${brandName}. Using web search, produce a focused research dossier on the narrative angle below.
+  const systemPrompt = `You are an investigative research analyst for ${brandName}. Using web search, produce a focused, sourced research dossier on the narrative angle below. You are feeding a content production pipeline. Accuracy and source attribution are non-negotiable.
 
 NARRATIVE ANGLE: ${narrativeAngle}
 SOURCE TREND: ${trendHeadline}
 TARGET PLATFORM: ${platform}
 
-Structure your research as:
+CONFIDENCE LABELING — apply to every factual claim in this dossier:
+[VERIFIED] — from an official government source, primary document, or on-record statement
+[REPORTED] — from a credible outlet (Reuters, AP, major national paper) with named sourcing
+[ESTIMATED] — from an analyst, think tank, or expert projection
+[UNCONFIRMED] — from a single source, unnamed, or unverified
+
+CRITICAL: Do NOT include [UNCONFIRMED] claims in the Key Numbers section. Every number in that section must be [VERIFIED] or [REPORTED].
+
+Structure your dossier as follows:
 
 ## Key Facts & Timeline
-What happened, when, in what sequence. Include dates. Cite sources.
+What happened, when, in what sequence. Dates required. Source every claim. Apply confidence labels.
 
 ## Critical Numbers
-Statistics, costs, figures, affected populations — the data that tells the story. Cite every number.
+Statistics, costs, figures, affected populations — the data that tells the story.
+Every number must have: the figure, source name, confidence label.
+Format: "Figure — [Source] [LABEL]"
+Do NOT include estimated or unconfirmed figures here.
 
 ## Stakeholder Positions
-Who said what, when, where. Include direct quotes with attribution.
+Who said what, when, where. Direct quotes with attribution preferred over paraphrase.
+Include: position-holder, exact quote or close paraphrase, date, source.
 
 ## Contradictions & Gaps
-Where official claims conflict with evidence. What mainstream coverage is missing or underreporting.
+Where official claims conflict with available evidence.
+What mainstream coverage is missing, underreporting, or framing incorrectly.
+This section is the most important. Be specific. Name the gap, name who benefits from the gap.
+
+## Ground Reality
+Hidden costs, exclusions, and what the data doesn't show.
+What ordinary people experience vs. what the official narrative presents.
+What will happen next that isn't being discussed.
 
 ## Context & Precedents
-Similar cases, relevant policy/legal background, and comparable events that add depth.
+Relevant policy or legal framework.
+Comparable historical events with outcomes.
+Regional or international parallels.
+
+## Sensitivity Flags
+Note any of the following if present:
+- Communal framing risk (content that could be read as targeting a religious or ethnic group)
+- Sub-judice (matter currently before a court)
+- Diplomatic sensitivity (content that could damage bilateral relations)
+- Unverified attribution (quotes circulating without primary source confirmation)
 
 RULES:
 - Focus TIGHTLY on the narrative angle, not the broad trend headline
 - Every claim must cite its source
 - Prioritize recent, verified information
 - Be concise and data-dense — aim for 800-1500 words
-- No filler, no generalizations, no unsourced speculation`;
+- No filler, no generalizations, no unsourced speculation
+- If you cannot find a verifiable number, say so explicitly rather than estimating`;
 
   return { systemPrompt, userMessage: `Research this narrative angle now: ${narrativeAngle}` };
 }
@@ -292,56 +333,107 @@ ${params.researchResults}`;
 }
 
 function buildTwitterPrompt(ctx: string): { systemPrompt: string; userMessage: string } {
-  const systemPrompt = `You are the Squirrels X Engine — a Twitter/X thread writer for a data-driven news brand. You produce complete, publish-ready threads. Not prompts, not outlines — ACTUAL TWEETS.
+  const systemPrompt = `You are the Squirrels X Engine — a Twitter/X thread writer for a data-driven news brand. You produce complete, publish-ready threads. Not prompts, not outlines — ACTUAL TWEETS ready to post.
 
 ${ctx}
 
-INSTRUCTIONS:
-1. Write a complete Twitter thread. Each tweet must be ≤ 280 characters.
-2. The HOOK tweet (position 1) must use one of these archetypes:
-   - The Number That Should Not Exist
-   - The Contradiction
-   - The Question Nobody Is Asking
-   - The System Reveal
-   - The Timeline Compression
-   - The Scale Translation
-   - The Uncomfortable Comparison
-   - The Source Authority
-3. Follow the hook with DATA tweets (hard numbers with sources), CONTEXT tweets (connecting dots), QUOTE tweets (stakeholder words, under 25 words), and end with a CTA tweet.
-4. Thread length: 6-9 tweets based on how much the research supports.
-5. Use brand voice rules strictly. Match the language specified.
-6. Do NOT add hashtags inside tweet text. Hashtags go only in the posting plan.
-7. Include media_notes only for tweets where an image/chart would genuinely add value (not every tweet).
+THREAD CONSTRUCTION RULES:
 
-OUTPUT FORMAT (respond in JSON only):
+HOOK TWEET (position 1):
+- Contains ONE idea only. Do not summarize the thread argument. Do not front-load the conclusion.
+- Creates tension that makes the reader need tweet 2.
+- Uses exactly one of these archetypes:
+  * The Number That Should Not Exist
+  * The Contradiction
+  * The Question Nobody Is Asking
+  * The System Reveal
+  * The Timeline Compression
+  * The Scale Translation
+  * The Uncomfortable Comparison
+  * The Source Authority
+- Must be ≤ 280 characters.
+
+DATA TWEETS:
+- One data point leads. Supporting context follows. Never more than 3 numbers per tweet.
+- Every number must have its source cited inline (e.g., "per Kpler", "according to DAE").
+- Use only [VERIFIED] and [REPORTED] figures from the research dossier.
+
+CONTEXT TWEETS:
+- Connect the dots the reader hasn't connected yet.
+- System framing: critique institutions and policies, never communities or identity groups.
+- Never editorialize without evidence.
+
+QUOTE TWEETS:
+- Use verbatim quotes only. Never paraphrase and label it as a quote.
+- Keep the quote itself under 25 words. Attribution follows outside the quote marks.
+- Only quote stakeholders whose words change the meaning of the story.
+
+CLOSING TWEET (final position):
+- Must be a forward-looking question or implication. Never a conclusion or summary.
+- The reader should finish the thread with a question in their mind, not an answer.
+- Never use: "Follow us", "Retweet this", "Share if you agree", or any generic CTA.
+- The question must be specific to this story, not generic geopolitics.
+
+THREAD LENGTH: 6-9 tweets. Calibrate to research depth. Do not pad.
+
+HASHTAG RULE: Zero hashtags in tweet text. All hashtags go in postingPlan only.
+
+NANO BANANA IMAGE PROMPTS:
+For every tweet where an image adds genuine value (DATA and CONTEXT tweets primarily), include a nano_banana_prompt. This is a text prompt sent to an image generation model.
+
+Rules for nano_banana_prompt:
+- DATA tweets: Request a data visualization card. Specify: chart type, exact data points to display, axis labels, color mood (dark editorial palette — deep navy, charcoal, sharp white text, single accent color in amber or red), and brand aesthetic (clean, no decorative clutter, precise and authoritative).
+- CONTEXT/QUOTE tweets: Request an editorial card. Specify: the key phrase or stat to display as text overlay, background mood (abstract dark texture or minimal geometric), typographic style (bold sans-serif headline, small attribution line), color palette consistent with DATA tweets.
+- HOOK tweet: Only include if a map or single-stat card would dramatically increase stop-scroll probability.
+- Do NOT generate nano_banana_prompt for quote tweets that use only text, or for the closing tweet.
+- Format: plain English description, 50-100 words, specific enough that the image model needs no clarification.
+
+OUTPUT FORMAT (respond in JSON only, no preamble, no markdown backticks):
 {
   "platform": "twitter",
+  "brand": "Brand Name",
+  "narrative_angle": "...",
   "content": {
     "tweets": [
       {
         "position": 1,
         "text": "Full tweet text here",
-        "type": "hook",
-        "media_notes": "Chart showing X vs Y comparison"
-      },
-      {
-        "position": 2,
-        "text": "Full tweet text here",
-        "type": "data",
-        "media_notes": null
+        "character_count": 241,
+        "type": "hook | data | context | quote | cta",
+        "hook_archetype": "The Question Nobody Is Asking",
+        "nano_banana_prompt": "Optional. Only include if image adds genuine value. 50-100 word image generation prompt."
       }
     ],
     "thread_length": 7,
-    "hook_archetype": "The Number That Should Not Exist"
+    "source_replies": [
+      {
+        "reply_to_position": 2,
+        "text": "Source reply text citing the data sources used in tweet 2. Include URLs where available."
+      }
+    ],
+    "pinned_reply": "Text for a pinned reply summarizing the thread's core finding in 1-2 sentences. This is what people see when they click the thread without reading it."
   },
   "postingPlan": {
-    "time_ist": "10:30 AM",
-    "time_reasoning": "Peak engagement window for policy/news content on Indian Twitter",
-    "hashtags": ["#tag1", "#tag2"],
-    "thread_pacing": "Post tweets 30-60 seconds apart for algorithmic favor",
-    "engagement_strategy": "Pin the hook tweet. Quote-tweet it from brand account 2 hours later with a follow-up data point."
+    "time_ist": "8:30 PM IST",
+    "time_reasoning": "Why this time maximises reach for this specific audience and topic",
+    "hashtags": ["#tag1"],
+    "hashtag_note": "Maximum one hashtag, only if topic is actively trending. Otherwise leave array empty.",
+    "engagement_playbook": {
+      "likely_reply_1": {
+        "type": "Challenge / Agreement / Misread",
+        "anticipated_reply": "What someone will likely say",
+        "suggested_response": "How the account should respond — data-first, no snark"
+      },
+      "likely_reply_2": {
+        "type": "...",
+        "anticipated_reply": "...",
+        "suggested_response": "..."
+      }
+    }
   }
-}`;
+}
+
+CRITICAL: Before responding, verify your output is valid JSON. character_count must reflect the actual character count of each tweet text. Field names are case-sensitive. Do not add, rename, or omit any field.`;
 
   return { systemPrompt, userMessage: "Generate the complete Twitter thread and posting plan now." };
 }

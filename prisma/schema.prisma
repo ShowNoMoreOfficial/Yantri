@@ -99,6 +99,7 @@ model ContentPiece {
   platform      Platform
   status        ContentStatus @default(PLANNED)
   bodyText      String        @db.Text
+  researchPrompt String?      @db.Text
   postingPlan   Json?         // Timing, hashtags, engagement strategy
   visualPrompts String?       @db.Text // Nano Banana structural prompts
   performanceData Json?       // Fed back from Relay
@@ -156,12 +157,13 @@ model TrendBatch {
 }
 
 model Trend {
-  id         String      @id @default(cuid())
-  rank       Int
-  score      Int
-  headline   String
-  reason     String
-  status     String      @default("pending")
+  id             String      @id @default(cuid())
+  rank           Int
+  score          Int
+  headline       String
+  reason         String
+  informationGap String?
+  status         String      @default("pending")
   skipReason String?
   batchId    String
   batch      TrendBatch  @relation(fields: [batchId], references: [id])

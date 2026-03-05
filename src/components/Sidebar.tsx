@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { LayoutDashboard, Inbox, TrendingUp, Building2, ShieldCheck, Clock, BarChart3, GitBranch, LogOut } from "lucide-react";
+import { LayoutDashboard, Inbox, TrendingUp, Building2, ShieldCheck, Clock, BarChart3, GitBranch, FileText, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const navItems = [
@@ -15,6 +15,7 @@ const navItems = [
   { href: "/platform-rules", label: "Platform Rules", icon: ShieldCheck },
   { href: "/history", label: "History", icon: Clock },
   { href: "/performance", label: "Performance", icon: BarChart3 },
+  { href: "/prompts", label: "Prompt Library", icon: FileText },
 ];
 
 export default function Sidebar() {

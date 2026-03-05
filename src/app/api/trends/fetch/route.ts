@@ -2,19 +2,36 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { callGemini, callGeminiResearch } from "@/lib/gemini";
 
-const TREND_ENGINE_PROMPT = `You are TREND_ENGINE. Your job is to identify and rank the most important trending topics right now for an Indian content creator.
+const TREND_ENGINE_PROMPT = `You are TREND_ENGINE. Your job is to identify and rank the most important trending topics right now for an Indian content creator focused on governance, geopolitics, and economic accountability.
 
 SCORING CRITERIA (0-10 scale each):
-1. PRESSURE: Does this force people to change behavior/money/safety?
-2. TRIGGER: Is there a specific new event today?
-3. NARRATIVE: Is there a clear "Villain vs Victim" or "System Failure"?
-4. SPREAD: Conflict, Emotion, Novelty.
+1. PRESSURE: Does this force people to change behavior, money, or safety?
+2. TRIGGER: Is there a specific new event today that makes this urgent?
+3. NARRATIVE: Is there a clear "System Failure" or "Accountability Gap" — where an institution, policy, or power structure has failed the public?
+4. SPREAD: Does this have conflict, novelty, or emotional stakes that drive sharing?
+5. INFORMATION_GAP: Is mainstream coverage missing the data, system, or stakeholder that tells the real story? (0-10)
+
+TOPIC CATEGORIES (scan only these):
+- Indian domestic politics and policy
+- Governance failures and successes with data
+- Economic impact (prices, jobs, taxes, inflation)
+- Defence and national security
+- India-specific international events (must have direct India angle)
+- Infrastructure, safety, and public health failures
+- Constitutional and legal developments
+
+NEVER INCLUDE:
+- Entertainment, Bollywood, celebrity
+- Sports
+- Religious or communal framing
+- Lifestyle, health trends, motivation
+- Pure international events with zero India connection
 
 TASK:
-1. Identify the top trending topics in India right now across politics, economy, defence, technology, governance, and culture.
-2. Deduplicate similar stories.
+1. Identify top trending topics in India right now across the approved categories above.
+2. Deduplicate similar stories — keep the most specific, data-rich version.
 3. Select the Top 15 highest-impact trends.
-4. Return strictly valid JSON.
+4. Return strictly valid JSON. No preamble, no markdown, no explanation outside the JSON.
 
 JSON FORMAT:
 [
@@ -22,7 +39,8 @@ JSON FORMAT:
     "rank": 1,
     "topic": "Concise Headline",
     "score": 95,
-    "reason": "Detailed 1-sentence analysis of the pressure/trigger."
+    "information_gap": "One sentence: what mainstream coverage is missing or underreporting about this story",
+    "reason": "One sentence: analysis of the pressure, trigger, and why it scores high"
   }
 ]`;
 
@@ -62,11 +80,12 @@ export async function POST() {
         source: "khabri_auto",
         trends: {
           create: ranked.map(
-            (t: { rank: number; topic: string; score: number; reason: string }) => ({
+            (t: { rank: number; topic: string; score: number; reason: string; information_gap?: string }) => ({
               rank: t.rank || 0,
               score: t.score || 0,
               headline: t.topic || "",
               reason: t.reason || "",
+              informationGap: t.information_gap || null,
             })
           ),
         },

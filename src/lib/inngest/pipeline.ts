@@ -70,14 +70,16 @@ export const contentPipeline = inngest.createFunction(
         return null;
       }
 
-      // No treeId — quick inline research
-      const systemPrompt = `You are a rapid research assistant. Gather key facts, statistics, and context for the following content piece. Be concise and data-dense. Cite sources where possible.
+      // No treeId — quick inline research (or targeted research if strategist generated a prompt)
+      // piece.bodyText is the angle, but piece represents an already processed decision
+      const systemPrompt = piece.researchPrompt || `You are a rapid research assistant. Gather key facts, statistics, and context for the following content piece. Be concise and data-dense. Cite sources where possible.
 
 PLATFORM: ${piece.platform}
 BRAND: ${piece.brand.name}
 
 Provide structured research covering: key facts, critical numbers, stakeholder positions, and context.`;
 
+      // Use the angle (stored in bodyText initially during strategist setup) as the user message
       const userMessage = `Research the following content briefly:\n\n${piece.bodyText.slice(0, 2000)}`;
 
       const result = await routeToModel("research", systemPrompt, userMessage);

@@ -13,15 +13,17 @@ export async function POST(request: Request) {
 
   if (!narrative) return NextResponse.json({ error: "Narrative not found" }, { status: 404 });
 
-  // Build the research prompt directly (no meta-prompt step)
-  const { systemPrompt, userMessage } = buildResearchPrompt(
+  // Use the generated prompt if available, fallback to template if missing
+  const systemPrompt = narrative.researchPrompt || buildResearchPrompt(
     narrative.angle,
     narrative.trend.headline,
     narrative.brand.name,
     narrative.platform
-  );
+  ).systemPrompt;
 
-  // Save prompt and set status
+  const userMessage = `Research this narrative angle now: ${narrative.angle}`;
+
+  // Ensure prompt is saved (in case we fell back) and update status
   await prisma.narrative.update({
     where: { id: narrativeId },
     data: {

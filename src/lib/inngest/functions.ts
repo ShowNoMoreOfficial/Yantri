@@ -50,13 +50,16 @@ export const narrativeResearch = inngest.createFunction(
     });
 
     // Step 3 — Run AI research via model router
+    // Use the scan-generated deep_research_prompt if available, fall back to template
     const researchResults = await step.run("run-research", async () => {
-      const { systemPrompt, userMessage } = buildResearchPrompt(
+      const systemPrompt = narrative.researchPrompt || buildResearchPrompt(
         narrative.angle,
         narrative.trend.headline,
         narrative.brand.name,
         narrative.platform
-      );
+      ).systemPrompt;
+
+      const userMessage = `Research this narrative angle now: ${narrative.angle}`;
 
       const result = await routeToModel("research", systemPrompt, userMessage);
       return result.raw;
@@ -361,6 +364,7 @@ export const gapAnalysisOnIngest = inngest.createFunction(
             platform: platformValue,
             status: "PLANNED",
             bodyText: `[Strategist Angle] ${decision.angle}\n\n[Reasoning] ${decision.reasoning}`,
+            researchPrompt: decision.deep_research_prompt,
           },
         });
 
