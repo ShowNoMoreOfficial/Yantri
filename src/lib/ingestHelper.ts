@@ -1,13 +1,15 @@
 /**
- * Ingest Helper — Shared signal-to-NarrativeTree processing
+ * Ingest Helper — AI-powered signal-to-NarrativeTree clustering
  *
- * Extracts the core semantic similarity logic and NarrativeTree/Node DB creation
- * so it can be reused by both the Khabri ingest API and the legacy trend import.
+ * Uses Gemini to assign new signals to existing narrative clusters or create
+ * new ones. Clusters are stable — they persist and grow over time.
+ * Stale clusters (no new signals in 7+ days) are auto-archived.
  */
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { generateEmbedding, findSimilarTree } from "@/lib/embeddings";
+import { generateEmbedding } from "@/lib/embeddings";
+import { callGemini } from "@/lib/gemini";
 import { inngest } from "@/lib/inngest/client";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -25,19 +27,96 @@ export interface IngestResult {
   newTrees: string[];
   appendedTo: string[];
   skipped: string[];
+  archived: number;
+}
+
+interface ClusterAssignment {
+  signalTitle: string;
+  assignedCluster: string | null; // null = create new cluster
+  newClusterName?: string;
+  newClusterSummary?: string;
+}
+
+// ─── AI Cluster Assignment ──────────────────────────────────────────────────
+
+const ASSIGN_SYSTEM_PROMPT = `You are a narrative intelligence analyst. You will be given:
+1. A list of EXISTING narrative clusters (with their names)
+2. A list of NEW signals to assign
+
+Your job: assign each new signal to the BEST matching existing cluster, OR mark it for a new cluster if it doesn't fit any.
+
+Rules:
+- Match signals to clusters by thematic relevance (e.g., "Gulf oil prices surge" fits "Iran-Israel Military Escalation" if it's a consequence)
+- Only create a NEW cluster if the signal truly doesn't fit any existing cluster
+- If creating a new cluster, provide a clear name and 1-sentence summary
+- Use the EXACT cluster name from the existing list when assigning
+- Use the EXACT signal title from the input when referencing signals
+
+Return JSON:
+{
+  "assignments": [
+    {
+      "signalTitle": "exact signal title",
+      "assignedCluster": "exact existing cluster name OR null if new",
+      "newClusterName": "only if assignedCluster is null",
+      "newClusterSummary": "only if assignedCluster is null"
+    }
+  ]
+}`;
+
+async function getAIAssignments(
+  signals: IngestSignal[],
+  existingClusters: { id: string; rootTrend: string }[]
+): Promise<ClusterAssignment[]> {
+  const clusterList = existingClusters.length > 0
+    ? existingClusters.map((c, i) => `${i + 1}. "${c.rootTrend}"`).join("\n")
+    : "(No existing clusters)";
+
+  const signalList = signals
+    .map((s, i) => `${i + 1}. [Score: ${s.score}] ${s.title} — ${s.reason}`)
+    .join("\n");
+
+  const userMessage = `EXISTING CLUSTERS:\n${clusterList}\n\nNEW SIGNALS TO ASSIGN:\n${signalList}`;
+
+  const { parsed } = await callGemini(ASSIGN_SYSTEM_PROMPT, userMessage, {
+    temperature: 0.1,
+  });
+
+  if (!parsed?.assignments || !Array.isArray(parsed.assignments)) {
+    return [];
+  }
+
+  return parsed.assignments;
+}
+
+// ─── Cluster Lifecycle ──────────────────────────────────────────────────────
+
+const STALE_DAYS = 7;
+
+/** Archive clusters that haven't received new signals in STALE_DAYS */
+export async function archiveStaleClusters(): Promise<number> {
+  const cutoff = new Date(Date.now() - STALE_DAYS * 24 * 60 * 60 * 1000);
+
+  const result = await prisma.narrativeTree.updateMany({
+    where: {
+      status: "ACTIVE",
+      updatedAt: { lt: cutoff },
+    },
+    data: { status: "ARCHIVED" },
+  });
+
+  return result.count;
 }
 
 // ─── Core Processor ─────────────────────────────────────────────────────────
 
 /**
- * Process an array of signals into NarrativeTrees.
+ * Process signals into NarrativeTrees using AI-powered cluster assignment.
  *
- * For each signal:
- * 1. Generate an embedding from title + reason
- * 2. Find a semantically similar active tree (threshold 0.85)
- * 3. If found, append as a NarrativeNode to the existing tree
- * 4. If not found, create a new NarrativeTree with its first node
- * 5. Fire the `yantri/tree.updated` Inngest event for downstream processing
+ * 1. Fetch existing active clusters
+ * 2. Ask Gemini to assign each signal to an existing cluster or create new ones
+ * 3. Create/update NarrativeTrees accordingly
+ * 4. Archive stale clusters (no activity in 7+ days)
  */
 export async function processSignalsToTrees(
   signals: IngestSignal[]
@@ -46,75 +125,127 @@ export async function processSignalsToTrees(
   const appendedTo: string[] = [];
   const skipped: string[] = [];
 
+  // Get existing active clusters
+  const existingClusters = await prisma.narrativeTree.findMany({
+    where: { status: "ACTIVE" },
+    select: { id: true, rootTrend: true },
+  });
+
+  // Get AI assignments
+  let assignments: ClusterAssignment[] = [];
+  try {
+    assignments = await getAIAssignments(signals, existingClusters);
+  } catch (err) {
+    console.error("AI assignment failed, skipping all signals:", err);
+    return {
+      ingested: 0,
+      newTrees: [],
+      appendedTo: [],
+      skipped: signals.map((s) => `"${s.title}": AI assignment failed`),
+      archived: 0,
+    };
+  }
+
+  // Build a lookup: cluster name -> id
+  const clusterMap = new Map(existingClusters.map((c) => [c.rootTrend, c.id]));
+  // Track newly created clusters in this batch so subsequent signals can use them
+  const newClusterMap = new Map<string, string>();
+
   for (const signal of signals) {
     try {
-      const textToEmbed = `${signal.title}. ${signal.reason}`;
-      const embedding = await generateEmbedding(textToEmbed);
+      const assignment = assignments.find(
+        (a) =>
+          a.signalTitle === signal.title ||
+          a.signalTitle?.toLowerCase().includes(signal.title.toLowerCase().slice(0, 40)) ||
+          signal.title.toLowerCase().includes(a.signalTitle?.toLowerCase().slice(0, 40))
+      );
 
-      const similarTree = await findSimilarTree(embedding, prisma);
+      const signalData = {
+        title: signal.title,
+        score: signal.score,
+        reason: signal.reason,
+        source: signal.source ?? "",
+        metadata: JSON.parse(JSON.stringify(signal.metadata ?? {})),
+      } satisfies Prisma.InputJsonValue;
 
-      if (similarTree) {
-        // Append as a new node to the existing tree
-        await prisma.narrativeNode.create({
-          data: {
-            treeId: similarTree.id,
-            signalTitle: signal.title,
-            signalScore: Math.round(signal.score),
-            signalData: {
-              title: signal.title,
-              score: signal.score,
-              reason: signal.reason,
-              source: signal.source ?? "",
-              metadata: JSON.parse(JSON.stringify(signal.metadata ?? {})),
-            } satisfies Prisma.InputJsonValue,
-          },
-        });
+      if (assignment?.assignedCluster) {
+        // Assign to existing cluster
+        const treeId =
+          clusterMap.get(assignment.assignedCluster) ||
+          newClusterMap.get(assignment.assignedCluster);
 
-        // Update tree's updatedAt timestamp
-        await prisma.narrativeTree.update({
-          where: { id: similarTree.id },
-          data: { updatedAt: new Date() },
-        });
+        if (treeId) {
+          // Check for duplicate signal in this tree
+          const existing = await prisma.narrativeNode.findFirst({
+            where: { treeId, signalTitle: signal.title },
+          });
 
-        appendedTo.push(
-          `"${signal.title}" -> tree "${similarTree.rootTrend}" (similarity: ${similarTree.similarity.toFixed(3)})`
-        );
-
-        // Trigger gap analysis for the updated tree
-        await inngest.send({
-          name: "yantri/tree.updated",
-          data: { treeId: similarTree.id },
-        });
-      } else {
-        // Create a new NarrativeTree with its first node
-        const tree = await prisma.narrativeTree.create({
-          data: {
-            rootTrend: signal.title,
-            summary: `Initial signal: ${signal.reason}`,
-            embedding: JSON.stringify(embedding),
-            nodes: {
-              create: {
+          if (!existing) {
+            await prisma.narrativeNode.create({
+              data: {
+                treeId,
                 signalTitle: signal.title,
                 signalScore: Math.round(signal.score),
-                signalData: {
-                  title: signal.title,
-                  score: signal.score,
-                  reason: signal.reason,
-                  source: signal.source ?? "",
-                  metadata: JSON.parse(JSON.stringify(signal.metadata ?? {})),
-                } satisfies Prisma.InputJsonValue,
+                signalData,
               },
+            });
+
+            await prisma.narrativeTree.update({
+              where: { id: treeId },
+              data: { updatedAt: new Date() },
+            });
+
+            appendedTo.push(`"${signal.title}" -> "${assignment.assignedCluster}"`);
+
+            try {
+              await inngest.send({
+                name: "yantri/tree.updated",
+                data: { treeId },
+              });
+            } catch { /* inngest may not be running */ }
+          } else {
+            skipped.push(`"${signal.title}": duplicate in "${assignment.assignedCluster}"`);
+          }
+        } else {
+          // Cluster name not found — fall through to create new
+          await createNewCluster(
+            signal,
+            assignment.assignedCluster,
+            `Signals related to: ${assignment.assignedCluster}`,
+            signalData,
+            newTrees,
+            newClusterMap,
+            clusterMap
+          );
+        }
+      } else {
+        // Create new cluster
+        const clusterName = assignment?.newClusterName || signal.title;
+        const clusterSummary = assignment?.newClusterSummary || `Initial signal: ${signal.reason}`;
+
+        // Check if this new cluster name was already created in this batch
+        const existingNewId = newClusterMap.get(clusterName);
+        if (existingNewId) {
+          await prisma.narrativeNode.create({
+            data: {
+              treeId: existingNewId,
+              signalTitle: signal.title,
+              signalScore: Math.round(signal.score),
+              signalData,
             },
-          },
-        });
-
-        newTrees.push(signal.title);
-
-        // Trigger gap analysis for the new tree
-        await inngest.send({
-          name: "yantri/tree.updated",
-          data: { treeId: tree.id },
-        });
+          });
+          appendedTo.push(`"${signal.title}" -> "${clusterName}" (new this batch)`);
+        } else {
+          await createNewCluster(
+            signal,
+            clusterName,
+            clusterSummary,
+            signalData,
+            newTrees,
+            newClusterMap,
+            clusterMap
+          );
+        }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
@@ -123,10 +254,63 @@ export async function processSignalsToTrees(
     }
   }
 
+  // Archive stale clusters
+  const archived = await archiveStaleClusters();
+
   return {
     ingested: newTrees.length + appendedTo.length,
     newTrees,
     appendedTo,
     skipped,
+    archived,
   };
+}
+
+async function createNewCluster(
+  signal: IngestSignal,
+  clusterName: string,
+  summary: string,
+  signalData: Prisma.InputJsonValue,
+  newTrees: string[],
+  newClusterMap: Map<string, string>,
+  clusterMap: Map<string, string>
+) {
+  // Don't create duplicate cluster if one with same name exists
+  if (clusterMap.has(clusterName)) {
+    return;
+  }
+
+  let embeddingStr: string | null = null;
+  try {
+    const embedding = await generateEmbedding(`${clusterName}. ${summary}`);
+    embeddingStr = JSON.stringify(embedding);
+  } catch (err) {
+    console.error(`Embedding failed for "${clusterName}":`, err);
+  }
+
+  const tree = await prisma.narrativeTree.create({
+    data: {
+      rootTrend: clusterName,
+      summary,
+      embedding: embeddingStr,
+      nodes: {
+        create: {
+          signalTitle: signal.title,
+          signalScore: Math.round(signal.score),
+          signalData,
+        },
+      },
+    },
+  });
+
+  newTrees.push(clusterName);
+  newClusterMap.set(clusterName, tree.id);
+  clusterMap.set(clusterName, tree.id);
+
+  try {
+    await inngest.send({
+      name: "yantri/tree.updated",
+      data: { treeId: tree.id },
+    });
+  } catch { /* inngest may not be running */ }
 }

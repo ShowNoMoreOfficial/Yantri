@@ -8,7 +8,7 @@ import { Zap } from "lucide-react";
 export default function ClusterButton() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ clustered: number; totalSignals: number } | null>(null);
+  const [result, setResult] = useState<{ clustered: number; totalSignals: number; message?: string } | null>(null);
   const [error, setError] = useState("");
 
   async function handleCluster() {
@@ -25,7 +25,7 @@ export default function ClusterButton() {
         return;
       }
 
-      setResult({ clustered: data.clustered, totalSignals: data.totalSignals });
+      setResult({ clustered: data.clustered, totalSignals: data.totalSignals, message: data.message });
       router.refresh();
     } catch {
       setError("Failed to connect to clustering service");
@@ -42,12 +42,12 @@ export default function ClusterButton() {
         className="gap-2 bg-indigo-600 hover:bg-indigo-700 font-semibold shadow-lg shadow-indigo-900/20"
       >
         <Zap className="w-4 h-4" />
-        {loading ? "Clustering..." : "Cluster All Trends"}
+        {loading ? "Clustering..." : "Sync Unclustered Trends"}
       </Button>
 
       {result && (
         <span className="text-xs text-emerald-400 font-semibold">
-          {result.clustered} clusters from {result.totalSignals} signals
+          {result.message || `${result.clustered} assigned from ${result.totalSignals} signals`}
         </span>
       )}
       {error && (
