@@ -36,18 +36,27 @@ async function getTrees(status?: string) {
 
   const trees = await prisma.narrativeTree.findMany({
     where,
-    // Sort by most recently updated (most active) first
-    orderBy: { updatedAt: "desc" },
     include: {
       _count: { select: { nodes: true, contentPieces: true } },
       dossier: { select: { id: true } },
-      // Fetch the 3 most recent nodes for the mini sub-trend list
       nodes: {
-        orderBy: { identifiedAt: "desc" },
-        take: 3,
-        select: { id: true, signalTitle: true, identifiedAt: true },
+        orderBy: { signalScore: "desc" },
+        select: { id: true, signalTitle: true, signalScore: true, identifiedAt: true },
       },
     },
+  });
+
+  // Sort by: total signal impact (sum of scores) * node count, descending
+  // This pushes high-impact clusters with many signals to the top
+  // and low-impact/miscellaneous clusters to the bottom
+  trees.sort((a, b) => {
+    const scoreA = a.nodes.reduce((sum, n) => sum + (n.signalScore || 0), 0);
+    const scoreB = b.nodes.reduce((sum, n) => sum + (n.signalScore || 0), 0);
+    const impactA = scoreA * a._count.nodes;
+    const impactB = scoreB * b._count.nodes;
+    if (impactB !== impactA) return impactB - impactA;
+    // Tiebreak: most recently updated first
+    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
   });
 
   return trees;
@@ -152,14 +161,14 @@ export default async function NarrativeTreesPage({ searchParams }: PageProps) {
                     )}
                   </div>
 
-                  {/* Recent Sub-Trends (Nodes) Mini-List */}
+                  {/* Top Signals (by impact score) */}
                   {tree.nodes.length > 0 && (
                     <div className="mb-3 flex-1">
                       <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-wider mb-2">
-                        Recent Signals
+                        Top Signals
                       </div>
                       <div className="space-y-1.5">
-                        {tree.nodes.map((node) => (
+                        {tree.nodes.slice(0, 3).map((node) => (
                           <div key={node.id} className="flex items-start gap-2">
                             <div className="w-1.5 h-1.5 rounded-full bg-zinc-600 mt-1.5 shrink-0" />
                             <span className="text-xs text-zinc-400 line-clamp-1 leading-relaxed">
