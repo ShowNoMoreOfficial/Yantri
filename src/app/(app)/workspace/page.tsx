@@ -275,7 +275,7 @@ export default function WorkspacePage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Workspace</h1>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">Workspace</h1>
           <p className="text-muted-foreground mt-1">Run the pipeline, review, approve, or kill content.</p>
         </div>
         <div className="flex items-center gap-3">
@@ -302,7 +302,7 @@ export default function WorkspacePage() {
       {/* ─── Run Pipeline Section ─────────────────────────────────────────── */}
       <Card className="rounded-2xl border-border">
         <CardContent className="p-5">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-indigo-500/10 rounded-lg flex items-center justify-center">
                 <Zap className="w-4 h-4 text-indigo-400" />
@@ -555,7 +555,7 @@ export default function WorkspacePage() {
 
       {/* Full Content Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] bg-zinc-950 border-zinc-800 rounded-2xl">
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-2xl max-h-[85vh] bg-zinc-950 border-zinc-800 rounded-2xl">
           {selectedNarrative && (
             <>
               <DialogHeader>
@@ -595,7 +595,7 @@ export default function WorkspacePage() {
                 </div>
               </ScrollArea>
 
-              <div className="flex gap-2 pt-2 border-t border-zinc-800">
+              <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-zinc-800">
                 <Button
                   className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm gap-2 shadow-lg shadow-emerald-900/20"
                   disabled={!!actionLoading[selectedNarrative.id]}

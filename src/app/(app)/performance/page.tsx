@@ -118,9 +118,9 @@ export default function PerformancePage() {
 
   return (
     <div className="animate-fade-in">
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-black text-foreground tracking-tight">Analytics</h1>
+          <h1 className="text-2xl md:text-3xl font-black text-foreground tracking-tight">Analytics</h1>
           <p className="text-muted-foreground mt-1 font-medium text-sm">Monitor reach, engagement, and content performance.</p>
         </div>
         <Button
@@ -288,8 +288,8 @@ export default function PerformancePage() {
         </div>
       )}
 
-      <div className="glass-card rounded-3xl overflow-hidden border-border shadow-xl shadow-black/20 mb-20">
-        <table className="w-full text-sm">
+      <div className="glass-card rounded-3xl overflow-hidden border-border shadow-xl shadow-black/20 mb-20 overflow-x-auto">
+        <table className="w-full text-sm min-w-[700px]">
           <thead>
             <tr className="bg-zinc-800/30 border-b border-border">
               <th className="text-left px-6 py-4 font-black text-zinc-500 uppercase tracking-widest text-[10px]">Brand Avatar</th>

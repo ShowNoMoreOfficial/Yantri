@@ -385,7 +385,7 @@ export default function NarrativeTreeDetailPage() {
                 Delete
               </Button>
             </AlertDialogTrigger>
-            <AlertDialogContent className="bg-zinc-950 border-zinc-800 rounded-2xl">
+            <AlertDialogContent className="bg-zinc-950 border-zinc-800 rounded-2xl max-w-[calc(100vw-2rem)] sm:max-w-lg">
               <AlertDialogHeader>
                 <AlertDialogTitle className="text-foreground">Delete Narrative Tree</AlertDialogTitle>
                 <AlertDialogDescription className="text-zinc-400">
@@ -420,7 +420,7 @@ export default function NarrativeTreeDetailPage() {
       )}
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 mb-8">
         <Card className="rounded-2xl card-hover border-border relative overflow-hidden group">
           <CardContent className="p-5">
             <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">

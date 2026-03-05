@@ -36,27 +36,15 @@ async function getTrees(status?: string) {
 
   const trees = await prisma.narrativeTree.findMany({
     where,
+    orderBy: { updatedAt: "desc" },
     include: {
       _count: { select: { nodes: true, contentPieces: true } },
       dossier: { select: { id: true } },
       nodes: {
-        orderBy: { signalScore: "desc" },
+        orderBy: { identifiedAt: "desc" },
         select: { id: true, signalTitle: true, signalScore: true, identifiedAt: true },
       },
     },
-  });
-
-  // Sort by: total signal impact (sum of scores) * node count, descending
-  // This pushes high-impact clusters with many signals to the top
-  // and low-impact/miscellaneous clusters to the bottom
-  trees.sort((a, b) => {
-    const scoreA = a.nodes.reduce((sum, n) => sum + (n.signalScore || 0), 0);
-    const scoreB = b.nodes.reduce((sum, n) => sum + (n.signalScore || 0), 0);
-    const impactA = scoreA * a._count.nodes;
-    const impactB = scoreB * b._count.nodes;
-    if (impactB !== impactA) return impactB - impactA;
-    // Tiebreak: most recently updated first
-    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
   });
 
   return trees;
@@ -76,12 +64,12 @@ export default async function NarrativeTreesPage({ searchParams }: PageProps) {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Narrative Clusters</h1>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">Narrative Clusters</h1>
           <p className="text-muted-foreground mt-1">
-            Active narrative trees sorted by signal activity. Hottest narratives first.
+            Narrative trees sorted by most recently updated. Latest activity first.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Badge variant="outline" className="text-zinc-400 border-zinc-700 font-semibold px-3 py-1.5">
             {trees.length} cluster{trees.length !== 1 ? "s" : ""}
           </Badge>
@@ -165,7 +153,7 @@ export default async function NarrativeTreesPage({ searchParams }: PageProps) {
                   {tree.nodes.length > 0 && (
                     <div className="mb-3 flex-1">
                       <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-wider mb-2">
-                        Top Signals
+                        Latest Signals
                       </div>
                       <div className="space-y-1.5">
                         {tree.nodes.slice(0, 3).map((node) => (

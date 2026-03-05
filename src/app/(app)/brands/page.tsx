@@ -32,9 +32,9 @@ export default function BrandsPage() {
 
   return (
     <div className="animate-fade-in">
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-black text-foreground tracking-tight">Brands</h1>
+          <h1 className="text-2xl md:text-3xl font-black text-foreground tracking-tight">Brands</h1>
           <p className="text-muted-foreground mt-1 font-medium text-sm">Manage editorial identities and voice rules.</p>
         </div>
         <Button asChild className="px-6 py-3 h-auto rounded-2xl font-bold shadow-lg shadow-black/20">
@@ -59,8 +59,8 @@ export default function BrandsPage() {
               className="block"
             >
               <Card className="rounded-3xl card-hover relative overflow-hidden group border-border">
-                <CardContent className="p-8">
-                  <div className="flex items-start justify-between mb-6">
+                <CardContent className="p-5 sm:p-8">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-6">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <h2 className="text-xl font-black text-foreground tracking-tight">{brand.name}</h2>

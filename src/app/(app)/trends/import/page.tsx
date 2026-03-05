@@ -295,29 +295,37 @@ export default function ImportTrendsPage() {
           <Card className="p-6">
             <div className="space-y-3">
               {manualRows.map((row, i) => (
-                <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                  <Input
-                    type="number"
-                    value={row.rank}
-                    onChange={(e) => {
-                      const updated = [...manualRows];
-                      updated[i] = { ...row, rank: parseInt(e.target.value) || 0 };
-                      setManualRows(updated);
-                    }}
-                    className="col-span-1 text-center"
-                    placeholder="#"
-                  />
-                  <Input
-                    type="number"
-                    value={row.score}
-                    onChange={(e) => {
-                      const updated = [...manualRows];
-                      updated[i] = { ...row, score: parseInt(e.target.value) || 0 };
-                      setManualRows(updated);
-                    }}
-                    className="col-span-1 text-center"
-                    placeholder="Score"
-                  />
+                <div key={i} className="flex flex-col sm:flex-row gap-2 items-start sm:items-center p-3 sm:p-0 bg-zinc-900/30 sm:bg-transparent rounded-xl sm:rounded-none">
+                  <div className="flex gap-2 w-full sm:w-auto">
+                    <Input
+                      type="number"
+                      value={row.rank}
+                      onChange={(e) => {
+                        const updated = [...manualRows];
+                        updated[i] = { ...row, rank: parseInt(e.target.value) || 0 };
+                        setManualRows(updated);
+                      }}
+                      className="w-16 text-center"
+                      placeholder="#"
+                    />
+                    <Input
+                      type="number"
+                      value={row.score}
+                      onChange={(e) => {
+                        const updated = [...manualRows];
+                        updated[i] = { ...row, score: parseInt(e.target.value) || 0 };
+                        setManualRows(updated);
+                      }}
+                      className="w-20 text-center"
+                      placeholder="Score"
+                    />
+                    <button
+                      onClick={() => setManualRows(manualRows.filter((_, j) => j !== i))}
+                      className="sm:hidden ml-auto text-red-400 hover:text-red-300 px-2 transition-colors"
+                    >
+                      x
+                    </button>
+                  </div>
                   <Input
                     type="text"
                     value={row.headline}
@@ -326,7 +334,7 @@ export default function ImportTrendsPage() {
                       updated[i] = { ...row, headline: e.target.value };
                       setManualRows(updated);
                     }}
-                    className="col-span-5"
+                    className="flex-1 w-full sm:w-auto"
                     placeholder="Headline"
                   />
                   <Input
@@ -337,12 +345,12 @@ export default function ImportTrendsPage() {
                       updated[i] = { ...row, reason: e.target.value };
                       setManualRows(updated);
                     }}
-                    className="col-span-4"
+                    className="flex-1 w-full sm:w-auto"
                     placeholder="Reason"
                   />
                   <button
                     onClick={() => setManualRows(manualRows.filter((_, j) => j !== i))}
-                    className="col-span-1 text-red-400 hover:text-red-300 text-center transition-colors"
+                    className="hidden sm:block text-red-400 hover:text-red-300 text-center transition-colors shrink-0 px-2"
                   >
                     x
                   </button>

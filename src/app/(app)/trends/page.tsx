@@ -34,8 +34,8 @@ export default function TrendsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-foreground">Trend Batches</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <h1 className="text-2xl md:text-3xl font-bold text-foreground">Trend Batches</h1>
         <Button asChild>
           <Link href="/trends/import">+ Import Trends</Link>
         </Button>
@@ -59,10 +59,10 @@ export default function TrendsPage() {
 
             return (
               <Card key={batch.id} className="p-6">
-                <div className="flex items-start justify-between mb-4">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
                   <div>
-                    <div className="flex items-center gap-3">
-                      <h2 className="text-lg font-semibold text-foreground">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <h2 className="text-base sm:text-lg font-semibold text-foreground">
                         {new Date(batch.importedAt).toLocaleDateString("en-IN", {
                           weekday: "short",
                           day: "numeric",
@@ -86,7 +86,7 @@ export default function TrendsPage() {
                       {batch.trends.length} trends — {selectedCount} selected, {skippedCount} skipped
                     </p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     {hasNarratives && (
                       <Button
                         variant="outline"
@@ -128,13 +128,13 @@ export default function TrendsPage() {
                   {batch.trends.map((t) => (
                     <div
                       key={t.id}
-                      className="flex items-center gap-3 py-2 border-b border-zinc-800 last:border-0"
+                      className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 py-2 border-b border-zinc-800 last:border-0"
                     >
-                      <span className="text-sm font-bold text-zinc-500 w-6">#{t.rank}</span>
-                      <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20 w-12 justify-center">
+                      <span className="text-sm font-bold text-zinc-500 w-6 shrink-0">#{t.rank}</span>
+                      <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20 w-12 justify-center shrink-0">
                         {t.score}
                       </Badge>
-                      <span className="text-sm flex-1 text-foreground">{t.headline}</span>
+                      <span className="text-sm flex-1 min-w-0 text-foreground">{t.headline}</span>
                       <Badge
                         className={
                           t.status === "selected"

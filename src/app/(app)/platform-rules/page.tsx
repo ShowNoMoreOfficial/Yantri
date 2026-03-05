@@ -75,9 +75,9 @@ export default function PlatformRulesPage() {
 
   return (
     <div className="animate-fade-in">
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-black text-foreground tracking-tight">Routing Rules</h1>
+          <h1 className="text-2xl md:text-3xl font-black text-foreground tracking-tight">Routing Rules</h1>
           <p className="text-muted-foreground mt-1 font-medium text-sm">Define how narratives flow across platforms.</p>
         </div>
         <Button
@@ -91,8 +91,8 @@ export default function PlatformRulesPage() {
         </Button>
       </div>
 
-      <div className="glass-card rounded-3xl overflow-hidden border-border shadow-xl shadow-black/20">
-        <table className="w-full text-sm">
+      <div className="glass-card rounded-3xl overflow-hidden border-border shadow-xl shadow-black/20 overflow-x-auto">
+        <table className="w-full text-sm min-w-[700px]">
           <thead>
             <tr className="bg-zinc-800/30 border-b border-border">
               <th className="text-left px-6 py-4 font-black text-zinc-500 uppercase tracking-widest text-[10px]">Narrative Type</th>
@@ -154,7 +154,7 @@ export default function PlatformRulesPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="flex gap-2 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex gap-2 justify-end md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={() => startEdit(rule)}
                           className="p-2 text-zinc-500 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-all"

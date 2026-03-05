@@ -36,7 +36,7 @@ export default function HistoryPage() {
   return (
     <div className="animate-fade-in">
       <div className="mb-8">
-        <h1 className="text-3xl font-black text-foreground tracking-tight">Narrative History</h1>
+        <h1 className="text-2xl md:text-3xl font-black text-foreground tracking-tight">Narrative History</h1>
         <p className="text-muted-foreground mt-1 font-medium text-sm">Review past intelligence cycles and generated outputs.</p>
       </div>
 
@@ -100,7 +100,7 @@ export default function HistoryPage() {
               onClick={() => setExpanded(expanded === n.id ? null : n.id)}
               className="w-full text-left p-6 group"
             >
-              <div className="flex items-start justify-between gap-6">
+              <div className="flex items-start justify-between gap-3 sm:gap-6">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
                     <StatusBadge status={n.status} />
@@ -111,7 +111,7 @@ export default function HistoryPage() {
                   <h3 className="font-black text-foreground leading-tight mb-2 group-hover:text-indigo-400 transition-colors">{n.angle}</h3>
                   <div className="flex items-center gap-2 text-xs text-zinc-500 font-medium">
                     <span className="shrink-0">Source Trend:</span>
-                    <span className="text-zinc-300 truncate max-w-md">{n.trend.headline}</span>
+                    <span className="text-zinc-300 truncate max-w-[200px] sm:max-w-md">{n.trend.headline}</span>
                   </div>
                 </div>
 

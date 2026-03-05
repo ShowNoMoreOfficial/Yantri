@@ -28,7 +28,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />
-      <main className="flex-1 p-8 lg:p-12 overflow-auto relative selection:bg-indigo-500/20 selection:text-indigo-200">
+      <main className="flex-1 p-4 pt-16 md:pt-8 md:p-8 lg:p-12 overflow-auto relative selection:bg-indigo-500/20 selection:text-indigo-200">
         <div className="max-w-[1400px] mx-auto">
           {children}
         </div>
