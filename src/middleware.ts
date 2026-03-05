@@ -13,5 +13,7 @@ export const config = {
     "/plan/:path*",
     "/history/:path*",
     "/performance/:path*",
+    "/workspace/:path*",
+    "/narrative-trees/:path*",
   ],
 };

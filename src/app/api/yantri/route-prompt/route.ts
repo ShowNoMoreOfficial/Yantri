@@ -21,7 +21,9 @@ export async function POST(request: Request) {
     narrative.platform,
     narrative.format,
     narrative.brand.name,
-    narrative.brand.voiceRules,
+    Array.isArray(narrative.brand.voiceRules)
+      ? (narrative.brand.voiceRules as string[]).join("; ")
+      : String(narrative.brand.voiceRules),
     narrative.researchResults
   );
 

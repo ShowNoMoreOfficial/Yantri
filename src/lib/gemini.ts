@@ -32,18 +32,22 @@ export async function callGemini(
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       const result = await genAI.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3.1-pro-preview",
         contents: userMessage,
         config: {
           systemInstruction: systemPrompt,
           temperature: options?.temperature ?? 0.3,
           maxOutputTokens: options?.maxOutputTokens ?? 65536,
           responseMimeType: "application/json",
-          thinkingConfig: { thinkingBudget: 0 },
         },
       });
 
       const rawText = result.text ?? "";
+
+      if (!rawText.trim()) {
+        console.error("Gemini returned empty response");
+        return { parsed: null, raw: rawText };
+      }
 
       try {
         return { parsed: JSON.parse(rawText), raw: rawText };
@@ -54,6 +58,7 @@ export async function callGemini(
         try {
           return { parsed: JSON.parse(jsonStr), raw: rawText };
         } catch {
+          console.error("Failed to parse Gemini response as JSON. Raw (first 500 chars):", rawText.slice(0, 500));
           return { parsed: null, raw: rawText };
         }
       }
@@ -74,4 +79,46 @@ export async function callGemini(
   }
 
   throw lastError ?? new Error("callGemini failed after retries");
+}
+
+/**
+ * Call Gemini 2.5 Flash with Google Search grounding for web-sourced research.
+ * Returns plain text (not JSON) with inline citations from live web results.
+ */
+export async function callGeminiResearch(
+  systemPrompt: string,
+  userMessage: string
+): Promise<string> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const result = await genAI.models.generateContent({
+        model: "gemini-3.1-pro-preview",
+        contents: userMessage,
+        config: {
+          systemInstruction: systemPrompt,
+          temperature: 0.3,
+          maxOutputTokens: 65536,
+          tools: [{ googleSearch: {} }],
+        },
+      });
+
+      return result.text ?? "";
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+
+      const message = lastError.message.toLowerCase();
+      if (message.includes("api key") || message.includes("invalid") || message.includes("permission")) {
+        throw lastError;
+      }
+
+      if (attempt < MAX_RETRIES - 1) {
+        const delay = BASE_DELAY_MS * Math.pow(2, attempt);
+        await sleep(delay);
+      }
+    }
+  }
+
+  throw lastError ?? new Error("callGeminiResearch failed after retries");
 }

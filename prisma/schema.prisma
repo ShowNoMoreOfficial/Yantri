@@ -3,9 +3,11 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+// ─── Auth ───────────────────────────────────────────────────────────────────
 
 model User {
   id        String   @id @default(cuid())
@@ -15,38 +17,133 @@ model User {
   createdAt DateTime @default(now())
 }
 
+// ─── Brand ──────────────────────────────────────────────────────────────────
+
 model Brand {
-  id                   String      @id @default(cuid())
-  name                 String      @unique
+  id                   String         @id @default(cuid())
+  name                 String         @unique
   tagline              String?
+  identityMarkdown     String?        @db.Text // Full brand identity doc (ingested MD)
   language             String
   tone                 String
-  editorialCovers      String      // JSON array of topics this brand covers
-  editorialNever       String      // JSON array of topics this brand never covers
+  editorialCovers      String         // JSON array of topics
+  editorialNever       String         // JSON array of exclusions
   audienceSize         String?
-  audienceDemographics String?     // JSON object
-  audienceGeography    String?     // JSON object
-  audienceInterests    String?     // JSON object
+  audienceDemographics String?        // JSON object
+  audienceGeography    String?        // JSON object
+  audienceInterests    String?        // JSON object
   audienceDescription  String?
-  activePlatforms      String      // JSON array of platform objects with name and role
-  voiceRules           String      // JSON array of voice rules
-  editorialPriorities  String      // JSON array ordered by priority
-  contentFrequency     String?     // JSON object of platform frequency targets
-  isActive             Boolean     @default(true)
-  createdAt            DateTime    @default(now())
-  updatedAt            DateTime    @updatedAt
+  activePlatforms      String         // JSON array of { name, role }
+  voiceRules           Json           // Voice rules as native JSON
+  editorialPriorities  String         // JSON array
+  contentFrequency     String?        // JSON object
+  isActive             Boolean        @default(true)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  contentPieces        ContentPiece[]
   narratives           Narrative[]
+
+  @@index([isActive])
 }
+
+// ─── Narrative Trees (Semantic Memory) ──────────────────────────────────────
+
+model NarrativeTree {
+  id         String                      @id @default(cuid())
+  rootTrend  String                      // Primary signal title
+  summary    String?         @db.Text    // AI-generated tree summary
+  embedding  String?       @db.Text    // Serialized embedding vector (JSON array of floats)
+  status     NarrativeTreeStatus         @default(ACTIVE)
+  nodes      NarrativeNode[]
+  dossier    FactDossier?
+  createdAt  DateTime                    @default(now())
+  updatedAt  DateTime                    @updatedAt
+}
+
+enum NarrativeTreeStatus {
+  ACTIVE
+  MERGED
+  ARCHIVED
+}
+
+model NarrativeNode {
+  id           String        @id @default(cuid())
+  treeId       String
+  tree         NarrativeTree @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  signalData   Json          // Raw Khabri payload
+  signalTitle  String        // Quick-access headline
+  signalScore  Int           @default(0)
+  identifiedAt DateTime      @default(now())
+
+  @@index([treeId])
+}
+
+model FactDossier {
+  id             String        @id @default(cuid())
+  treeId         String        @unique
+  tree           NarrativeTree @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  structuredData Json          // { facts, stats, quotes, timeline }
+  sources        String[]      // Array of source URLs
+  rawResearch    String?       @db.Text // Full research text before synthesis
+  lastUpdated    DateTime      @updatedAt
+  createdAt      DateTime      @default(now())
+}
+
+// ─── Content Pieces (Multi-Platform Deliverables) ───────────────────────────
+
+model ContentPiece {
+  id            String        @id @default(cuid())
+  brandId       String
+  brand         Brand         @relation(fields: [brandId], references: [id])
+  treeId        String?       // Optional link to NarrativeTree
+  platform      Platform
+  status        ContentStatus @default(PLANNED)
+  bodyText      String        @db.Text
+  postingPlan   Json?         // Timing, hashtags, engagement strategy
+  visualPrompts String?       @db.Text // Nano Banana structural prompts
+  performanceData Json?       // Fed back from Relay
+  approvedAt    DateTime?
+  publishedAt   DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([brandId])
+  @@index([status])
+  @@index([platform])
+}
+
+enum Platform {
+  YOUTUBE
+  X_THREAD
+  X_SINGLE
+  BLOG
+  LINKEDIN
+  META_REEL
+  META_CAROUSEL
+  META_POST
+}
+
+enum ContentStatus {
+  PLANNED
+  RESEARCHING
+  DRAFTED
+  APPROVED
+  RELAYED
+  PUBLISHED
+  KILLED
+}
+
+// ─── Legacy Models (kept for migration compatibility) ───────────────────────
 
 model PlatformRule {
   id                String   @id @default(cuid())
-  narrativeType     String   // e.g., "system_failure", "single_number", "human_impact"
-  primaryPlatform   String   // e.g., "twitter_thread", "youtube_longform", "blog"
-  secondaryPlatform String?  // optional secondary
-  brandName         String?  // if null, applies to all brands
-  sendWhen          String   // JSON array of conditions
-  neverSend         String   // JSON array of exclusions
-  speedPriority     String   // e.g., "30_minutes", "2_4_hours", "24_48_hours"
+  narrativeType     String
+  primaryPlatform   String
+  secondaryPlatform String?
+  brandName         String?
+  sendWhen          String   // JSON array
+  neverSend         String   // JSON array
+  speedPriority     String
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 }
@@ -64,12 +161,15 @@ model Trend {
   score      Int
   headline   String
   reason     String
-  status     String      @default("pending") // pending, selected, skipped, monitoring
+  status     String      @default("pending")
   skipReason String?
   batchId    String
   batch      TrendBatch  @relation(fields: [batchId], references: [id])
   createdAt  DateTime    @default(now())
   narratives Narrative[]
+
+  @@index([batchId])
+  @@index([status])
 }
 
 model Narrative {
@@ -77,34 +177,40 @@ model Narrative {
   angle             String
   whyThisAngle      String
   informationGap    String
-  priority          Int      // 1 = make today, 2 = this week, 3 = monitoring
+  priority          Int
   platform          String
   secondaryPlatform String?
   format            String
   urgency           String
-  status            String   @default("planned") // planned, researching, producing, published, killed
+  status            String   @default("planned")
   trendId           String
   trend             Trend    @relation(fields: [trendId], references: [id])
   brandId           String
   brand             Brand    @relation(fields: [brandId], references: [id])
   researchPrompt    String?
-  researchResults   String?
-  enginePrompt      String?
-  packageData       String?  // JSON with titles, thumbnail, description, tags, timing
-  finalContent      String?
+  researchResults   String?  @db.Text
+  enginePrompt      String?  @db.Text
+  packageData       String?  @db.Text
+  finalContent      String?  @db.Text
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+
+  @@index([trendId])
+  @@index([brandId])
+  @@index([status])
 }
 
 model EditorialLog {
   id             String   @id @default(cuid())
-  action         String   // "selected", "skipped", "override", "published"
+  action         String
   reasoning      String
   trendHeadline  String
   narrativeAngle String?
   platform       String?
   brandName      String?
   createdAt      DateTime @default(now())
+
+  @@index([action])
 }
 
 model PerformanceData {
@@ -112,7 +218,7 @@ model PerformanceData {
   narrativeId    String?
   platform       String
   brandName      String
-  contentType    String    // thread, video, blog, reel, tweet
+  contentType    String
   impressions    Int?
   engagementRate Float?
   replies        Int?
@@ -124,4 +230,7 @@ model PerformanceData {
   notes          String?
   publishedAt    DateTime?
   recordedAt     DateTime  @default(now())
+
+  @@index([platform])
+  @@index([brandName])
 }

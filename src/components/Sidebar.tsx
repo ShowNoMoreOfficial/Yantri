@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { LayoutDashboard, TrendingUp, Building2, ShieldCheck, Clock, BarChart3, LogOut } from "lucide-react";
+import { LayoutDashboard, Inbox, TrendingUp, Building2, ShieldCheck, Clock, BarChart3, GitBranch, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/workspace", label: "Workspace", icon: Inbox },
+  { href: "/narrative-trees", label: "Narrative Trees", icon: GitBranch },
   { href: "/trends", label: "Trends", icon: TrendingUp },
   { href: "/brands", label: "Brands", icon: Building2 },
   { href: "/platform-rules", label: "Platform Rules", icon: ShieldCheck },

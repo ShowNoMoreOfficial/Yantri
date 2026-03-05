@@ -24,7 +24,7 @@ export async function POST(request: Request) {
       audienceInterests: body.audienceInterests ? JSON.stringify(body.audienceInterests) : null,
       audienceDescription: body.audienceDescription || null,
       activePlatforms: JSON.stringify(body.activePlatforms || []),
-      voiceRules: JSON.stringify(body.voiceRules || []),
+      voiceRules: body.voiceRules || [],
       editorialPriorities: JSON.stringify(body.editorialPriorities || []),
       contentFrequency: body.contentFrequency ? JSON.stringify(body.contentFrequency) : null,
       isActive: body.isActive ?? true,

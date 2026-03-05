@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   TrendingUp,
   Clock,
@@ -12,6 +13,9 @@ import {
   Users,
   Settings,
   ChevronRight,
+  GitBranch,
+  BookOpen,
+  ArrowRight,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -58,8 +62,34 @@ async function getStats() {
   };
 }
 
+async function getNarrativeTrees() {
+  const trees = await prisma.narrativeTree.findMany({
+    orderBy: { updatedAt: "desc" },
+    take: 6,
+    include: {
+      _count: { select: { nodes: true } },
+      dossier: { select: { id: true } },
+    },
+  });
+
+  return trees;
+}
+
+function treeStatusColor(status: string) {
+  switch (status) {
+    case "ACTIVE":
+      return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+    case "MERGED":
+      return "bg-blue-500/10 text-blue-400 border-blue-500/20";
+    case "ARCHIVED":
+      return "bg-zinc-500/10 text-zinc-400 border-zinc-500/20";
+    default:
+      return "bg-zinc-500/10 text-zinc-400 border-zinc-500/20";
+  }
+}
+
 export default async function DashboardPage() {
-  const stats = await getStats();
+  const [stats, trees] = await Promise.all([getStats(), getNarrativeTrees()]);
 
   return (
     <div className="animate-fade-in">
@@ -135,6 +165,80 @@ export default async function DashboardPage() {
             <div className="text-4xl font-black text-blue-400">{stats.totalNarratives}</div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Active Narrative Trees */}
+      <div className="mb-10">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400">
+              <GitBranch className="w-5 h-5" />
+            </div>
+            <h2 className="text-xl font-bold text-foreground">Active Narrative Trees</h2>
+          </div>
+          {trees.length > 0 && (
+            <Link href="/trends" className="flex items-center gap-1.5 text-xs font-bold text-indigo-400 hover:text-indigo-300 uppercase tracking-wider transition-colors">
+              View All
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          )}
+        </div>
+
+        {trees.length === 0 ? (
+          <Card className="rounded-2xl border-border">
+            <CardContent className="p-6">
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="w-16 h-16 bg-zinc-800/50 rounded-full flex items-center justify-center mb-4">
+                  <GitBranch className="w-8 h-8 text-zinc-600" />
+                </div>
+                <p className="text-zinc-500 font-medium text-sm">No narrative trees yet.</p>
+                <p className="text-zinc-600 text-xs mt-1">Trees will appear here as signals are clustered into narratives.</p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {trees.map((tree) => (
+              <Card key={tree.id} className="rounded-2xl card-hover border-border group">
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <h3 className="text-sm font-bold text-foreground line-clamp-2 group-hover:text-indigo-300 transition-colors leading-snug">
+                      {tree.rootTrend}
+                    </h3>
+                    <Badge className={`shrink-0 text-[10px] font-bold uppercase tracking-wide border ${treeStatusColor(tree.status)}`}>
+                      {tree.status}
+                    </Badge>
+                  </div>
+
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+                      <GitBranch className="w-3.5 h-3.5" />
+                      <span className="font-semibold">{tree._count.nodes} node{tree._count.nodes !== 1 ? "s" : ""}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <BookOpen className="w-3.5 h-3.5" />
+                      {tree.dossier ? (
+                        <span className="text-emerald-400 font-semibold">Dossier ready</span>
+                      ) : (
+                        <span className="text-zinc-600 font-semibold">No dossier</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {tree.summary && (
+                    <p className="text-xs text-zinc-500 line-clamp-2 leading-relaxed mb-3">
+                      {tree.summary}
+                    </p>
+                  )}
+
+                  <div className="text-[10px] font-medium text-zinc-600">
+                    Updated {new Date(tree.updatedAt).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { callGemini } from "@/lib/gemini";
+import { callGeminiResearch } from "@/lib/gemini";
 import { buildResearchPrompt } from "@/lib/prompts";
-import { spawn } from "child_process";
-import path from "path";
 
 export async function POST(request: Request) {
   const { narrativeId } = await request.json();
@@ -15,7 +13,7 @@ export async function POST(request: Request) {
 
   if (!narrative) return NextResponse.json({ error: "Narrative not found" }, { status: 404 });
 
-  // Step 1: Generate the research prompt via Gemini
+  // Build the research prompt directly (no meta-prompt step)
   const { systemPrompt, userMessage } = buildResearchPrompt(
     narrative.angle,
     narrative.trend.headline,
@@ -23,96 +21,60 @@ export async function POST(request: Request) {
     narrative.platform
   );
 
-  const { parsed, raw } = await callGemini(systemPrompt, userMessage);
-  const researchPromptText = parsed?.research_prompt || raw;
-
-  // Save the generated research prompt
+  // Save prompt and set status
   await prisma.narrative.update({
     where: { id: narrativeId },
     data: {
-      researchPrompt: researchPromptText,
+      researchPrompt: systemPrompt,
       status: "researching",
     },
   });
 
-  // Step 2: Run deep research via Interactions API (Python script)
-  const scriptPath = path.join(process.cwd(), "scripts", "deep_research.py");
-  const geminiKey = process.env.GEMINI_API_KEY;
-
-  if (!geminiKey) {
-    return NextResponse.json(
-      { error: "GEMINI_API_KEY is not set in environment variables" },
-      { status: 500 }
-    );
-  }
-
-  // Build a focused research query from the narrative
-  const researchQuery = `${narrative.angle} — From trend: ${narrative.trend.headline} — For brand: ${narrative.brand.name} on platform: ${narrative.platform}`;
-
   // Stream SSE response
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
-    start(controller) {
+    async start(controller) {
       const sendEvent = (data: Record<string, unknown>) => {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
       };
 
-      sendEvent({ event: "prompt_ready", researchPrompt: researchPromptText, manualQueries: parsed?.manual_queries || [] });
-
-      const child = spawn("python", [scriptPath, researchQuery], {
-        env: { ...process.env, GEMINI_API_KEY: geminiKey },
+      sendEvent({ event: "prompt_ready", researchPrompt: systemPrompt });
+      sendEvent({
+        event: "status",
+        message: "Researching with Gemini + Google Search grounding...",
+        phase: "researching",
       });
 
-      let fullOutput = "";
+      try {
+        const text = await callGeminiResearch(systemPrompt, userMessage);
 
-      child.stdout.on("data", (data: Buffer) => {
-        const lines = data.toString().split("\n").filter((l: string) => l.trim());
-        for (const line of lines) {
-          try {
-            const parsed = JSON.parse(line);
-            sendEvent(parsed);
-
-            if (parsed.event === "complete" && parsed.research) {
-              fullOutput = parsed.research;
-            }
-          } catch {
-            // Non-JSON output, send as status
-            sendEvent({ event: "status", message: line });
-          }
-        }
-      });
-
-      child.stderr.on("data", (data: Buffer) => {
-        const msg = data.toString().trim();
-        if (msg) {
-          console.error("Deep research stderr:", msg);
-          sendEvent({ event: "status", message: `[stderr] ${msg}` });
-        }
-      });
-
-      child.on("close", async (code) => {
-        if (fullOutput) {
-          // Save research results to narrative
+        if (text) {
           await prisma.narrative.update({
             where: { id: narrativeId },
-            data: { researchResults: fullOutput },
+            data: { researchResults: text },
           });
+          sendEvent({ event: "complete", research: text });
           sendEvent({ event: "done", success: true });
         } else {
-          // Reset status so user can retry
           await prisma.narrative.update({
             where: { id: narrativeId },
             data: { status: "planned" },
           });
-          sendEvent({ event: "done", success: false, error: `Process exited with code ${code}` });
+          sendEvent({ event: "error", message: "Research completed but returned empty output" });
+          sendEvent({ event: "done", success: false, error: "Empty output" });
         }
-        controller.close();
-      });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        // Reset status so user can retry
+        await prisma.narrative.update({
+          where: { id: narrativeId },
+          data: { status: "planned" },
+        });
+        sendEvent({ event: "error", message: `Research failed: ${message}` });
+        sendEvent({ event: "done", success: false, error: message });
+      }
 
-      child.on("error", (err) => {
-        sendEvent({ event: "error", message: err.message });
-        controller.close();
-      });
+      controller.close();
     },
   });
 

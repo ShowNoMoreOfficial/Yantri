@@ -26,7 +26,7 @@ Tone: ${b.tone}
 Covers: ${JSON.parse(b.editorialCovers).join(", ")}
 Never Covers: ${JSON.parse(b.editorialNever).join(", ")}
 ALLOWED PLATFORMS (ONLY use these): ${platformList}
-Voice Rules: ${JSON.parse(b.voiceRules).join("; ")}
+Voice Rules: ${(Array.isArray(b.voiceRules) ? (b.voiceRules as string[]) : []).join("; ")}
 Editorial Priorities: ${JSON.parse(b.editorialPriorities).join(", ")}`;
     })
     .join("\n---\n");
@@ -123,37 +123,37 @@ export function buildResearchPrompt(
   brandName: string,
   platform: string
 ) {
-  const systemPrompt = `Generate a precise deep research prompt for the following narrative angle. The prompt will be pasted into a research AI (Gemini Deep Research) to produce a comprehensive dossier.
+  const systemPrompt = `You are an investigative research analyst for ${brandName}. Using web search, produce a focused research dossier on the narrative angle below.
 
-NARRATIVE: ${narrativeAngle}
-FROM TREND: ${trendHeadline}
-FOR BRAND: ${brandName}
+NARRATIVE ANGLE: ${narrativeAngle}
+SOURCE TREND: ${trendHeadline}
 TARGET PLATFORM: ${platform}
 
-The research prompt MUST request:
-- Timeline of events with dates and sources
-- Key numbers (costs, casualties, affected populations, budget figures) with source labels
-- Stakeholder positions (who said what, when, where)
-- Official claims vs available evidence (contradictions)
-- Policy/legal framework (what rules exist, what was violated)
-- Ground reality (hidden costs, exclusions, what numbers miss)
-- 3-5 expert or institutional quotes with attribution
-- What mainstream coverage is missing or underreporting
-- Comparable precedents (similar events domestically or internationally)
+Structure your research as:
 
-CRITICAL: Target research at the SPECIFIC NARRATIVE ANGLE, not the broad trend headline.
+## Key Facts & Timeline
+What happened, when, in what sequence. Include dates. Cite sources.
 
-Also generate 3-5 specific Google search queries for quick manual data gathering.
+## Critical Numbers
+Statistics, costs, figures, affected populations — the data that tells the story. Cite every number.
 
-OUTPUT FORMAT (respond in JSON only, no other text):
-{
-  "research_prompt": "The full prompt text ready to paste into Gemini Deep Research",
-  "manual_queries": [
-    {"query": "...", "looking_for": "..."}
-  ]
-}`;
+## Stakeholder Positions
+Who said what, when, where. Include direct quotes with attribution.
 
-  return { systemPrompt, userMessage: "Generate the research prompt now." };
+## Contradictions & Gaps
+Where official claims conflict with evidence. What mainstream coverage is missing or underreporting.
+
+## Context & Precedents
+Similar cases, relevant policy/legal background, and comparable events that add depth.
+
+RULES:
+- Focus TIGHTLY on the narrative angle, not the broad trend headline
+- Every claim must cite its source
+- Prioritize recent, verified information
+- Be concise and data-dense — aim for 800-1500 words
+- No filler, no generalizations, no unsourced speculation`;
+
+  return { systemPrompt, userMessage: `Research this narrative angle now: ${narrativeAngle}` };
 }
 
 export function buildEnginePrompt(

@@ -193,11 +193,11 @@ export default function PlanPage() {
           try {
             const data = JSON.parse(line.slice(6));
             if (data.event === "prompt_ready") {
-              setResearchProgress((prev) => [...prev, "Research prompt generated. Starting deep research..."]);
+              setResearchProgress((prev) => [...prev, "Research prompt ready. Searching web sources..."]);
             } else if (data.event === "status") {
               setResearchProgress((prev) => [...prev, data.message]);
             } else if (data.event === "complete") {
-              setResearchProgress((prev) => [...prev, "Deep research complete!"]);
+              setResearchProgress((prev) => [...prev, "Research complete!"]);
             } else if (data.event === "error") {
               setResearchProgress((prev) => [...prev, `Error: ${data.message}`]);
             } else if (data.event === "done") {
@@ -426,7 +426,7 @@ export default function PlanPage() {
             {active.status === "planned" && !researching && (
               <div className="flex gap-2 mb-6">
                 <Button onClick={() => generateResearch(active.id)} disabled={researching} className="rounded-lg">
-                  Approve & Start Deep Research
+                  Approve & Start Research
                 </Button>
                 <Button
                   variant="outline"
@@ -447,8 +447,8 @@ export default function PlanPage() {
                       <LoadingSpinner size="md" />
                     </div>
                     <div>
-                      <h3 className="text-lg font-bold text-foreground tracking-tight">Deep Research Pipeline Active</h3>
-                      <p className="text-sm text-indigo-400 font-medium">Synthesizing narrative logic...</p>
+                      <h3 className="text-lg font-bold text-foreground tracking-tight">Research Pipeline Active</h3>
+                      <p className="text-sm text-indigo-400 font-medium">Searching web & synthesizing research...</p>
                     </div>
                   </div>
                   <div className="flex flex-col items-end">
@@ -463,7 +463,7 @@ export default function PlanPage() {
                 <div className="w-full bg-indigo-500/10 rounded-full h-2 mb-6 overflow-hidden border border-indigo-500/20">
                   <div
                     className="bg-indigo-600 h-2 rounded-full transition-all duration-1000 ease-linear shadow-[0_0_12px_rgba(79,70,229,0.4)]"
-                    style={{ width: `${Math.min((researchElapsed / 180) * 100, 95)}%` }}
+                    style={{ width: `${Math.min((researchElapsed / 45) * 100, 95)}%` }}
                   />
                 </div>
                 {researchProgress.length > 0 && (
@@ -519,7 +519,7 @@ export default function PlanPage() {
                   <summary className="flex items-center justify-between cursor-pointer">
                     <div className="flex items-center gap-2">
                       <span className="w-2 h-2 bg-green-500 rounded-full" />
-                      <h3 className="font-semibold text-sm text-foreground">Deep Research Results</h3>
+                      <h3 className="font-semibold text-sm text-foreground">Research Results</h3>
                     </div>
                     <CopyButton text={active.researchResults} />
                   </summary>
@@ -534,7 +534,7 @@ export default function PlanPage() {
             {active.researchPrompt && !active.researchResults && !researching && active.status !== "researching" && (
               <Card className="rounded-xl border-border p-6 mb-4">
                 <h3 className="font-semibold text-sm text-foreground mb-2">Manual Research Paste (fallback)</h3>
-                <p className="text-xs text-muted-foreground mb-3">If deep research failed, paste your own research here.</p>
+                <p className="text-xs text-muted-foreground mb-3">If automated research failed, paste your own research here.</p>
                 <Textarea
                   value={researchText}
                   onChange={(e) => setResearchText(e.target.value)}

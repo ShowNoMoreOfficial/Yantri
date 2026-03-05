@@ -42,7 +42,7 @@ export default function EditBrandPage() {
     editorialNever: JSON.parse(brand.editorialNever),
     audienceDescription: brand.audienceDescription || "",
     activePlatforms: JSON.parse(brand.activePlatforms),
-    voiceRules: JSON.parse(brand.voiceRules),
+    voiceRules: Array.isArray(brand.voiceRules) ? brand.voiceRules : [],
     editorialPriorities: JSON.parse(brand.editorialPriorities),
     isActive: brand.isActive,
   };

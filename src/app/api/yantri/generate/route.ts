@@ -22,10 +22,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const voiceRules = (() => {
-      try { return JSON.parse(narrative.brand.voiceRules).join("; "); }
-      catch { return narrative.brand.voiceRules; }
-    })();
+    const voiceRules = Array.isArray(narrative.brand.voiceRules)
+      ? (narrative.brand.voiceRules as string[]).join("; ")
+      : String(narrative.brand.voiceRules);
 
     const { systemPrompt, userMessage } = buildContentGenerationPrompt(
       narrative.platform,
@@ -39,13 +38,7 @@ export async function POST(request: Request) {
       narrative.trend.headline
     );
 
-    // YouTube and blog scripts need more output tokens
-    const platform = narrative.platform.toLowerCase();
-    const needsLargeOutput = platform.includes("youtube") || platform.includes("blog");
-
-    const { parsed, raw } = await callGemini(systemPrompt, userMessage, {
-      maxOutputTokens: needsLargeOutput ? 16384 : 8192,
-    });
+    const { parsed, raw } = await callGemini(systemPrompt, userMessage);
 
     if (!parsed) {
       return NextResponse.json(

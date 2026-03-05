@@ -1,15 +1,19 @@
-# Yantri — Narrative Intelligence Orchestrator
+# Yantri v3 — Narrative Intelligence Orchestrator
 
 ## Project Overview
 
-Yantri is a narrative intelligence platform for the ShowNoMore brand. It ingests trending topics, generates editorial narratives with AI, routes content to platforms, and tracks performance.
+Yantri is the cognitive middle-layer of a three-engine infrastructure (Khabri → Yantri → Relay). It transforms raw signals into high-precision editorial, marketing, and operational deliverables using autonomous "Narrative Trees" and semantic caching, with a multi-model AI approach for maximum strategic depth and creative precision.
 
 ## Tech Stack
 
-- **Framework**: Next.js 14 (App Router) with TypeScript (strict mode)
-- **Database**: SQLite via Prisma ORM
+- **Framework**: Next.js 15 (App Router) with TypeScript (strict mode)
+- **Database**: PostgreSQL + pgvector via Prisma ORM (semantic memory for Narrative Trees)
 - **Auth**: NextAuth v4 with credentials provider (bcryptjs for password hashing)
-- **AI**: Gemini 2.5 Flash via `@google/genai` (native JSON mode, retry with exponential backoff); Deep Research via `google-genai` Python SDK (Interactions API with `deep-research-pro-preview-12-2025` agent)
+- **AI Models**:
+  - **Gemini 2.5 Flash**: Strategy, long-context ingestion, research synthesis (via `@google/genai`)
+  - **Claude Sonnet 4**: High-precision drafting, voice-mimicry, final packaging (via `@anthropic-ai/sdk`)
+- **Model Router**: `src/lib/modelRouter.ts` — delegates tasks to optimal model by type
+- **Workflow Engine**: Inngest for durable, long-running research/generation tasks
 - **Styling**: Tailwind CSS 3
 - **Fonts**: Geist Sans (local woff)
 
@@ -18,23 +22,45 @@ Yantri is a narrative intelligence platform for the ShowNoMore brand. It ingests
 ```
 src/
   app/
-    (app)/          # Authenticated route group (dashboard, brands, trends, etc.)
-    api/            # API routes (brands, narratives, trends, yantri AI endpoints, etc.)
-    login/          # Public login page
-    layout.tsx      # Root layout with Providers wrapper
-    providers.tsx   # Client-side providers (NextAuth SessionProvider)
-  components/       # Shared UI components (BrandForm, Sidebar, CopyButton, StatusBadge)
+    (app)/              # Authenticated route group
+      dashboard/        # Narrative Tree overview + stats
+      workspace/        # Mobile-responsive Approve & Push screen
+      brands/           # Brand management
+      trends/           # Trend import + viewing
+      plan/[batchId]/   # Planning interface with content preview
+      history/          # Editorial log
+      performance/      # Performance tracking
+      platform-rules/   # Platform routing rules
+    api/
+      ingest/           # Khabri Gateway — semantic throttling + tree creation
+      inngest/          # Inngest serve endpoint for durable workflows
+      relay/publish/    # Relay handoff endpoint
+      yantri/           # AI functions (scan, research, generate, package)
+      brands/           # Brand CRUD
+      narratives/       # Narrative CRUD
+      trends/           # Trend management
+    login/              # Public login page
+    layout.tsx          # Root layout with Providers wrapper
+    providers.tsx       # Client-side providers (SessionProvider)
+  components/           # Shared UI components
   lib/
-    gemini.ts       # AI helper — Gemini 2.5 Flash with JSON mode and retry
-    auth.ts         # NextAuth configuration
-    prisma.ts       # Prisma client singleton
-    prompts.ts      # System prompts for AI pipelines
-  middleware.ts     # NextAuth route protection
+    modelRouter.ts      # AI model router (Gemini vs Claude by task type)
+    gemini.ts           # Gemini 2.5 Flash client with retry + JSON mode
+    embeddings.ts       # Vector embedding generation for pgvector
+    prompts.ts          # System prompts for all AI pipelines
+    auth.ts             # NextAuth configuration
+    prisma.ts           # Prisma client singleton
+    inngest/
+      client.ts         # Inngest client
+      functions.ts      # Durable workflow functions
+    engines/
+      index.ts          # Content + packaging engine orchestrator
+      nanoBanana.ts     # Visual prompt generator (structural prompts)
+      hrOps.ts          # HR/Operations content engine
+  middleware.ts         # NextAuth route protection
 prisma/
-  schema.prisma     # Database schema
-  seed.ts           # Database seed script
-scripts/
-  deep_research.py  # Python research script
+  schema.prisma         # PostgreSQL + pgvector schema
+  seed.ts               # Database seed script
 ```
 
 ## Commands
@@ -42,28 +68,51 @@ scripts/
 - `npm run dev` — Start dev server
 - `npm run build` — Production build
 - `npm run lint` — ESLint
-- `npx prisma db push` — Apply schema changes to SQLite
+- `npx prisma db push` — Apply schema to PostgreSQL
 - `npx prisma generate` — Regenerate Prisma client
+- `npx prisma migrate dev` — Create and apply migration
 - `npx tsx prisma/seed.ts` — Seed the database
+- `npx inngest-cli dev` — Start Inngest dev server (for local workflow testing)
 
 ## Key Conventions
 
 - Path alias: `@/*` maps to `./src/*`
-- Prisma models store JSON as stringified JSON in `String` fields (parse with `JSON.parse()`)
-- The `callGemini()` function in `src/lib/gemini.ts` returns `{ parsed, raw }` — uses native JSON mode (`responseMimeType: "application/json"`) with markdown-fence fallback; retries transient errors up to 3 times with exponential backoff
-- Authenticated routes live under the `(app)` route group; middleware protects them
-- API routes follow RESTful patterns: `api/<resource>/route.ts` for list/create, `api/<resource>/[id]/route.ts` for get/update/delete
+- **Model Router**: Use `routeToModel(taskType, systemPrompt, userMessage)` — task types: `strategy`, `research`, `drafting`, `packaging`, `analysis`, `visual`
+- **Narrative Trees**: Semantic deduplication via pgvector. New signals check similarity > 0.9 before creating new trees
+- Prisma models use native `Json` type where possible; legacy string-JSON fields still use `JSON.parse()`
+- Authenticated routes under `(app)` route group; middleware protects them
+- API routes follow RESTful patterns
+- Inngest handles long-running tasks (research, content generation) as durable workflows
 
 ## Environment Variables
 
 Required in `.env`:
-- `DATABASE_URL` — SQLite connection string (e.g., `file:./dev.db`)
+- `DATABASE_URL` — PostgreSQL connection string (e.g., `postgresql://user:pass@host:5432/yantri`)
 - `GEMINI_API_KEY` — Google Gemini API key
+- `ANTHROPIC_API_KEY` — Anthropic Claude API key
 - `NEXTAUTH_SECRET` — NextAuth session secret
 - `NEXTAUTH_URL` — App URL (e.g., `http://localhost:3000`)
+- `INNGEST_EVENT_KEY` — Inngest event key (optional for dev)
 
 ## Database
 
-SQLite with Prisma. Key models: `Brand`, `Trend`, `TrendBatch`, `Narrative`, `PlatformRule`, `EditorialLog`, `PerformanceData`, `User`.
+PostgreSQL with pgvector extension. Core models:
 
-Narratives are the core entity — they link a `Trend` to a `Brand` with a specific angle, platform, and status lifecycle: `planned → researching → producing → published → killed`.
+- **NarrativeTree** — Semantic memory: deduplicates signals via vector embeddings
+- **NarrativeNode** — Individual signals attached to a tree
+- **FactDossier** — Synthesized research locked to a tree
+- **ContentPiece** — Multi-platform deliverables with status lifecycle
+- **Brand** — Editorial identity with voice rules and platform config
+- **Narrative** — Links Trend → Brand with angle, platform, and content
+
+Content lifecycle: `PLANNED → RESEARCHING → DRAFTED → APPROVED → RELAYED → PUBLISHED`
+
+## Multi-Agent Workflow
+
+1. **Ingestion** (Khabri Gateway): Signals vectorized → pgvector similarity check → branch or create NarrativeTree
+2. **Research** (Fact Engine): Gemini synthesizes web research into structured FactDossier
+3. **Strategy** (Gemini): Reads brand identity + dossier + performance → decides platform routing
+4. **Drafting** (Claude): Writes platform-specific content with brand voice precision
+5. **Packaging** (Claude): Generates titles, thumbnails, SEO, posting plans
+6. **Approval** (Workspace): Human approves via mobile-responsive interface
+7. **Relay** (Handoff): Approved content pushed to Relay system for publishing

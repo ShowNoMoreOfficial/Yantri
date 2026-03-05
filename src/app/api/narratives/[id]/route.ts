@@ -1,16 +1,18 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-export async function GET(_request: Request, { params }: { params: { id: string } }) {
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const narrative = await prisma.narrative.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: { brand: true, trend: true },
   });
   if (!narrative) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(narrative);
 }
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const body = await request.json();
 
   const data: Record<string, unknown> = {};
@@ -23,7 +25,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   if (body.packageData !== undefined) data.packageData = body.packageData;
 
   const narrative = await prisma.narrative.update({
-    where: { id: params.id },
+    where: { id },
     data,
     include: { brand: true, trend: true },
   });

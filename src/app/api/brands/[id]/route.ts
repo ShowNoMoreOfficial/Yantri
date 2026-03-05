@@ -1,16 +1,18 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-export async function GET(_request: Request, { params }: { params: { id: string } }) {
-  const brand = await prisma.brand.findUnique({ where: { id: params.id } });
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const brand = await prisma.brand.findUnique({ where: { id } });
   if (!brand) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(brand);
 }
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const body = await request.json();
   const brand = await prisma.brand.update({
-    where: { id: params.id },
+    where: { id },
     data: {
       name: body.name,
       tagline: body.tagline || null,
@@ -24,7 +26,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       audienceInterests: body.audienceInterests ? JSON.stringify(body.audienceInterests) : null,
       audienceDescription: body.audienceDescription || null,
       activePlatforms: JSON.stringify(body.activePlatforms || []),
-      voiceRules: JSON.stringify(body.voiceRules || []),
+      voiceRules: body.voiceRules || [],
       editorialPriorities: JSON.stringify(body.editorialPriorities || []),
       contentFrequency: body.contentFrequency ? JSON.stringify(body.contentFrequency) : null,
       isActive: body.isActive ?? true,
@@ -33,7 +35,8 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   return NextResponse.json(brand);
 }
 
-export async function DELETE(_request: Request, { params }: { params: { id: string } }) {
-  await prisma.brand.delete({ where: { id: params.id } });
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  await prisma.brand.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }

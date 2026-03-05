@@ -29,9 +29,44 @@ interface Narrative {
   platform: string;
 }
 
+interface PerformanceSummary {
+  timeRange: { from: string; to: string; days: number };
+  totals: {
+    records: number;
+    impressions: number;
+    views: number;
+    avgEngagementRate: number;
+    avgCtr: number;
+  };
+  byPlatform: {
+    platform: string;
+    records: number;
+    impressions: number;
+    views: number;
+    avgEngagementRate: number;
+  }[];
+  byContentType: {
+    contentType: string;
+    records: number;
+    impressions: number;
+    views: number;
+    avgEngagementRate: number;
+  }[];
+  topPerforming: {
+    id: string;
+    platform: string;
+    brandName: string;
+    contentType: string;
+    impressions: number | null;
+    views: number | null;
+    engagementRate: number | null;
+  }[];
+}
+
 export default function PerformancePage() {
   const [records, setRecords] = useState<PerformanceRecord[]>([]);
   const [narratives, setNarratives] = useState<Narrative[]>([]);
+  const [summary, setSummary] = useState<PerformanceSummary | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     narrativeId: "",
@@ -50,9 +85,17 @@ export default function PerformancePage() {
     publishedAt: "",
   });
 
+  const fetchSummary = () => {
+    fetch("/api/performance/summary?days=30")
+      .then((r) => r.json())
+      .then(setSummary)
+      .catch(() => {});
+  };
+
   useEffect(() => {
     fetch("/api/performance").then((r) => r.json()).then(setRecords);
     fetch("/api/narratives?status=published").then((r) => r.json()).then(setNarratives);
+    fetchSummary();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -64,6 +107,7 @@ export default function PerformancePage() {
     });
     const record = await res.json();
     setRecords([record, ...records]);
+    fetchSummary();
     setShowForm(false);
     setForm({
       narrativeId: "", platform: "", brandName: "", contentType: "thread",
@@ -177,6 +221,71 @@ export default function PerformancePage() {
             Commit Metrics to Ledger
           </Button>
         </form>
+      )}
+
+      {/* ── Summary Stats ───────────────────────────────────────────── */}
+      {summary && summary.totals.records > 0 && (
+        <div className="mb-10 animate-fade-in">
+          {/* Headline stat cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="glass-card rounded-2xl p-5 border-border shadow-lg shadow-black/10">
+              <p className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-1">Total Records</p>
+              <p className="text-2xl font-black text-foreground">{summary.totals.records.toLocaleString()}</p>
+              <p className="text-[10px] text-zinc-600 mt-1">Last {summary.timeRange.days} days</p>
+            </div>
+            <div className="glass-card rounded-2xl p-5 border-border shadow-lg shadow-black/10">
+              <p className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-1">Total Impressions</p>
+              <p className="text-2xl font-black text-foreground">{summary.totals.impressions.toLocaleString()}</p>
+              <p className="text-[10px] text-zinc-600 mt-1">Across all platforms</p>
+            </div>
+            <div className="glass-card rounded-2xl p-5 border-border shadow-lg shadow-black/10">
+              <p className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-1">Total Views</p>
+              <p className="text-2xl font-black text-foreground">{summary.totals.views.toLocaleString()}</p>
+              <p className="text-[10px] text-zinc-600 mt-1">All content types</p>
+            </div>
+            <div className="glass-card rounded-2xl p-5 border-border shadow-lg shadow-black/10">
+              <p className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-1">Avg Engagement</p>
+              <p className="text-2xl font-black text-emerald-400">{summary.totals.avgEngagementRate}%</p>
+              <p className="text-[10px] text-zinc-600 mt-1">CTR avg: {summary.totals.avgCtr}%</p>
+            </div>
+          </div>
+
+          {/* Platform breakdown + Top content types */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {summary.byPlatform.length > 0 && (
+              <div className="glass-card rounded-2xl p-5 border-border shadow-lg shadow-black/10">
+                <p className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-3">By Platform</p>
+                <div className="space-y-2">
+                  {summary.byPlatform.map((p) => (
+                    <div key={p.platform} className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-zinc-300 uppercase tracking-tight">{p.platform}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-[10px] text-zinc-500">{p.impressions.toLocaleString()} imp</span>
+                        <span className="text-xs font-black text-emerald-400">{p.avgEngagementRate}%</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {summary.byContentType.length > 0 && (
+              <div className="glass-card rounded-2xl p-5 border-border shadow-lg shadow-black/10">
+                <p className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-3">By Content Type</p>
+                <div className="space-y-2">
+                  {summary.byContentType.map((t) => (
+                    <div key={t.contentType} className="flex items-center justify-between">
+                      <span className="px-2 py-0.5 bg-zinc-800 text-zinc-300 rounded text-[9px] font-black uppercase tracking-widest">{t.contentType}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-[10px] text-zinc-500">{t.views.toLocaleString()} views</span>
+                        <span className="text-xs font-black text-emerald-400">{t.avgEngagementRate}%</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       <div className="glass-card rounded-3xl overflow-hidden border-border shadow-xl shadow-black/20 mb-20">
