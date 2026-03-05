@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     }
 
     const response = await genAI.models.generateContent({
-      model: "gemini-2.0-flash-exp",
+      model: "gemini-3.1-flash-image-preview",
       contents: `Generate an image based on this prompt: ${prompt}`,
       config: {
         responseModalities: ["IMAGE", "TEXT"],
