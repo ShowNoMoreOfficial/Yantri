@@ -54,10 +54,10 @@ interface FactDossier {
   id: string;
   treeId: string;
   structuredData: {
-    facts?: string[];
-    stats?: { label: string; value: string }[];
-    quotes?: { text: string; source?: string }[];
-    timeline?: { date: string; event: string }[];
+    facts?: (string | { claim: string; source?: string; confidence?: string })[];
+    stats?: { label?: string; metric?: string; value: string; source?: string; context?: string }[];
+    quotes?: { text: string; speaker?: string; role?: string; date?: string; source?: string }[];
+    timeline?: { date: string; event: string; source?: string }[];
   };
   sources: string[];
   rawResearch: string | null;
@@ -770,12 +770,15 @@ function DossierView({ dossier }: { dossier: FactDossier }) {
               Key Facts
             </h3>
             <ul className="space-y-2.5">
-              {data.facts.map((fact, i) => (
-                <li key={i} className="flex items-start gap-3 text-sm text-zinc-300 leading-relaxed">
-                  <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-2 shrink-0" />
-                  {fact}
-                </li>
-              ))}
+              {data.facts.map((fact, i) => {
+                const text = typeof fact === "string" ? fact : fact.claim;
+                return (
+                  <li key={i} className="flex items-start gap-3 text-sm text-zinc-300 leading-relaxed">
+                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-2 shrink-0" />
+                    {text}
+                  </li>
+                );
+              })}
             </ul>
           </CardContent>
         </Card>
@@ -792,7 +795,7 @@ function DossierView({ dossier }: { dossier: FactDossier }) {
             <div className="divide-y divide-white/5">
               {data.stats.map((stat, i) => (
                 <div key={i} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
-                  <span className="text-sm text-zinc-400">{stat.label}</span>
+                  <span className="text-sm text-zinc-400">{stat.label || stat.metric}</span>
                   <span className="text-sm font-bold text-foreground">{stat.value}</span>
                 </div>
               ))}
@@ -815,9 +818,9 @@ function DossierView({ dossier }: { dossier: FactDossier }) {
                   <p className="text-sm text-zinc-300 leading-relaxed italic">
                     &ldquo;{quote.text}&rdquo;
                   </p>
-                  {quote.source && (
+                  {(quote.speaker || quote.source) && (
                     <p className="text-xs text-zinc-500 mt-1.5 font-semibold">
-                      -- {quote.source}
+                      -- {quote.speaker}{quote.speaker && quote.role ? `, ${quote.role}` : ""}{quote.source && !quote.speaker ? quote.source : ""}
                     </p>
                   )}
                 </div>
