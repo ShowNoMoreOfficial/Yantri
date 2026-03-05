@@ -20,22 +20,21 @@ export async function POST(request: Request) {
     });
 
     const parts = response.candidates?.[0]?.content?.parts;
-    const imagePart = parts?.find(
-      (p: Record<string, unknown>) => p.inlineData && typeof p.inlineData === "object"
-    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const imagePart = parts?.find((p: any) => p.inlineData);
 
-    if (!imagePart || !("inlineData" in imagePart)) {
+    if (!imagePart || !imagePart.inlineData) {
       return NextResponse.json(
         { error: "No image generated" },
         { status: 500 }
       );
     }
 
-    const inlineData = imagePart.inlineData as { data: string; mimeType: string };
+    const { data, mimeType } = imagePart.inlineData as { data: string; mimeType: string };
 
     return NextResponse.json({
-      image: inlineData.data,
-      mimeType: inlineData.mimeType || "image/png",
+      image: data,
+      mimeType: mimeType || "image/png",
     });
   } catch (error) {
     console.error("Image generation failed:", error);
