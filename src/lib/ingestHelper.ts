@@ -131,17 +131,38 @@ export async function processSignalsToTrees(
     select: { id: true, rootTrend: true },
   });
 
+  // Build a global set of all existing signal titles (across ALL trees) for dedup
+  const allExistingNodes = await prisma.narrativeNode.findMany({
+    select: { signalTitle: true },
+  });
+  const globalTitles = new Set(allExistingNodes.map((n) => n.signalTitle.toLowerCase().trim()));
+
+  // Pre-filter signals: skip any that already exist globally (case-insensitive)
+  const freshSignals = signals.filter((s) => {
+    const normalizedTitle = s.title.toLowerCase().trim();
+    if (globalTitles.has(normalizedTitle)) {
+      skipped.push(`"${s.title}": duplicate signal (already exists in a tree)`);
+      return false;
+    }
+    return true;
+  });
+
+  if (freshSignals.length === 0) {
+    const archived = await archiveStaleClusters();
+    return { ingested: 0, newTrees: [], appendedTo: [], skipped, archived };
+  }
+
   // Get AI assignments
   let assignments: ClusterAssignment[] = [];
   try {
-    assignments = await getAIAssignments(signals, existingClusters);
+    assignments = await getAIAssignments(freshSignals, existingClusters);
   } catch (err) {
     console.error("AI assignment failed, skipping all signals:", err);
     return {
       ingested: 0,
       newTrees: [],
       appendedTo: [],
-      skipped: signals.map((s) => `"${s.title}": AI assignment failed`),
+      skipped: [...skipped, ...freshSignals.map((s) => `"${s.title}": AI assignment failed`)],
       archived: 0,
     };
   }
@@ -151,7 +172,7 @@ export async function processSignalsToTrees(
   // Track newly created clusters in this batch so subsequent signals can use them
   const newClusterMap = new Map<string, string>();
 
-  for (const signal of signals) {
+  for (const signal of freshSignals) {
     try {
       const assignment = assignments.find(
         (a) =>
@@ -195,6 +216,7 @@ export async function processSignalsToTrees(
               data: { updatedAt: new Date() },
             });
 
+            globalTitles.add(signal.title.toLowerCase().trim());
             appendedTo.push(`"${signal.title}" -> "${assignment.assignedCluster}"`);
 
             try {
@@ -215,7 +237,8 @@ export async function processSignalsToTrees(
             signalData,
             newTrees,
             newClusterMap,
-            clusterMap
+            clusterMap,
+            globalTitles
           );
         }
       } else {
@@ -234,6 +257,7 @@ export async function processSignalsToTrees(
               signalData,
             },
           });
+          globalTitles.add(signal.title.toLowerCase().trim());
           appendedTo.push(`"${signal.title}" -> "${clusterName}" (new this batch)`);
         } else {
           await createNewCluster(
@@ -243,7 +267,8 @@ export async function processSignalsToTrees(
             signalData,
             newTrees,
             newClusterMap,
-            clusterMap
+            clusterMap,
+            globalTitles
           );
         }
       }
@@ -273,7 +298,8 @@ async function createNewCluster(
   signalData: Prisma.InputJsonValue,
   newTrees: string[],
   newClusterMap: Map<string, string>,
-  clusterMap: Map<string, string>
+  clusterMap: Map<string, string>,
+  globalTitles?: Set<string>
 ) {
   // Don't create duplicate cluster if one with same name exists
   if (clusterMap.has(clusterName)) {
@@ -306,6 +332,7 @@ async function createNewCluster(
   newTrees.push(clusterName);
   newClusterMap.set(clusterName, tree.id);
   clusterMap.set(clusterName, tree.id);
+  if (globalTitles) globalTitles.add(signal.title.toLowerCase().trim());
 
   try {
     await inngest.send({

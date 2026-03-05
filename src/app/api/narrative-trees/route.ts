@@ -29,6 +29,11 @@ export async function GET(request: Request) {
     include: {
       _count: { select: { nodes: true } },
       dossier: { select: { id: true } },
+      nodes: {
+        orderBy: { identifiedAt: "desc" },
+        take: 3,
+        select: { id: true, signalTitle: true, identifiedAt: true },
+      },
     },
   });
 
