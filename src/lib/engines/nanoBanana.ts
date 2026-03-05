@@ -21,6 +21,7 @@ export interface VisualPromptParams {
   emotion: string;
   colorMood: string;
   generatedContent?: string; // The drafted tweet/thread/content from the content engine
+  researchData?: string; // FactDossier research to inform visual prompt crafting
 }
 
 export interface NanoBananaAngle {
@@ -118,6 +119,10 @@ function buildVisualSystemPrompt(
     ? `\nDRAFTED CONTENT (the tweet/thread/post this visual will accompany):\n${params.generatedContent.slice(0, 3000)}\n`
     : "";
 
+  const researchBlock = params.researchData
+    ? `\nRESEARCH DOSSIER (use these facts, stats, and timeline to inform visual choices and nano banana angles):\n${params.researchData.slice(0, 4000)}\n`
+    : "";
+
   return `You are Nano Banana — the visual prompt architect and engagement strategist for ${params.brandName}. You generate highly detailed, production-ready text prompts for AI image generators AND high-engagement "nano banana" angles.
 
 You do NOT generate images. You generate the PROMPT TEXT that a designer or AI tool will use, PLUS provocative engagement angles tied to the drafted content.
@@ -127,7 +132,7 @@ PLATFORM: ${params.platform}
 BRAND: ${params.brandName}
 DESIRED EMOTION: ${params.emotion}
 COLOR MOOD: ${params.colorMood}
-${contentBlock}
+${contentBlock}${researchBlock}
 PLATFORM SPECS:
 - Thumbnail ratio: ${specs.thumbnailRatio}
 - Social card ratio: ${specs.socialCardRatio}

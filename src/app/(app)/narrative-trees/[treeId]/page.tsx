@@ -618,13 +618,21 @@ export default function NarrativeTreeDetailPage() {
             ) : (
               <div className="space-y-3">
                 {tree.contentPieces.map((piece) => {
-                  // Parse visual prompts to show nano banana angles
+                  // Parse visual prompts to show nano banana angles + visual prompt descriptions
                   let nanoBananaAngles: { type: string; text: string }[] = [];
+                  let thumbnailPrompt: string | null = null;
+                  let socialCardPrompt: string | null = null;
                   if (piece.visualPrompts) {
                     try {
                       const vp = JSON.parse(piece.visualPrompts);
                       if (Array.isArray(vp.nanoBananaAngles)) {
                         nanoBananaAngles = vp.nanoBananaAngles;
+                      }
+                      if (typeof vp.thumbnailPrompt === "string" && vp.thumbnailPrompt) {
+                        thumbnailPrompt = vp.thumbnailPrompt;
+                      }
+                      if (typeof vp.socialCardPrompt === "string" && vp.socialCardPrompt) {
+                        socialCardPrompt = vp.socialCardPrompt;
                       }
                     } catch { /* ignore parse errors */ }
                   }
@@ -665,6 +673,40 @@ export default function NarrativeTreeDetailPage() {
                                   <span className="text-zinc-300">{angle.text}</span>
                                 </div>
                               ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Visual Prompts (Thumbnail & Social Card) */}
+                        {(thumbnailPrompt || socialCardPrompt) && (
+                          <div className="mb-3">
+                            <div className="text-[10px] font-bold text-violet-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                              <Sparkles className="w-3 h-3" />
+                              Visual Prompts
+                            </div>
+                            <div className="space-y-2">
+                              {thumbnailPrompt && (
+                                <details className="group">
+                                  <summary className="cursor-pointer text-xs font-semibold text-zinc-400 hover:text-zinc-200 transition-colors flex items-center gap-1.5">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
+                                    Thumbnail Prompt
+                                  </summary>
+                                  <p className="text-xs text-zinc-500 leading-relaxed mt-1.5 ml-3 bg-violet-500/5 rounded-lg px-3 py-2 border border-violet-500/10">
+                                    {thumbnailPrompt}
+                                  </p>
+                                </details>
+                              )}
+                              {socialCardPrompt && (
+                                <details className="group">
+                                  <summary className="cursor-pointer text-xs font-semibold text-zinc-400 hover:text-zinc-200 transition-colors flex items-center gap-1.5">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
+                                    Social Card Prompt
+                                  </summary>
+                                  <p className="text-xs text-zinc-500 leading-relaxed mt-1.5 ml-3 bg-violet-500/5 rounded-lg px-3 py-2 border border-violet-500/10">
+                                    {socialCardPrompt}
+                                  </p>
+                                </details>
+                              )}
                             </div>
                           </div>
                         )}

@@ -243,6 +243,7 @@ Provide structured research covering: key facts, critical numbers, stakeholder p
         emotion: (thumbnail?.emotion as string) ?? "curiosity",
         colorMood: (thumbnail?.color_mood as string) ?? "bold, high contrast",
         generatedContent: contentResult.raw,
+        researchData: finalResearch ?? undefined,
       };
 
       const visualResult = await generateVisualPrompts(visualParams);
