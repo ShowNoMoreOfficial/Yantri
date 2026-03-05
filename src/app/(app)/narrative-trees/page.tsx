@@ -1,18 +1,17 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   GitBranch,
   BookOpen,
-  Zap,
   ArrowRight,
   TreePine,
   FileText,
   Signal,
 } from "lucide-react";
 import NarrativeTreeFilters from "./filters";
+import ClusterButton from "./ClusterButton";
 
 export const dynamic = "force-dynamic";
 
@@ -77,12 +76,7 @@ export default async function NarrativeTreesPage({ searchParams }: PageProps) {
           <Badge variant="outline" className="text-zinc-400 border-zinc-700 font-semibold px-3 py-1.5">
             {trees.length} cluster{trees.length !== 1 ? "s" : ""}
           </Badge>
-          <Button asChild className="gap-2 bg-indigo-600 hover:bg-indigo-700 font-semibold shadow-lg shadow-indigo-900/20">
-            <Link href="/dashboard">
-              <Zap className="w-4 h-4" />
-              Ingest Signals
-            </Link>
-          </Button>
+          <ClusterButton />
         </div>
       </div>
 
