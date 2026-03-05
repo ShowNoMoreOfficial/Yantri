@@ -504,7 +504,7 @@ export default function NarrativeTreeDetailPage() {
               {/* Node timeline */}
               <div className="ml-[7px] border-l-2 border-zinc-800 pl-5 space-y-3">
                 {tree.nodes.map((node, index) => {
-                  const signalData = node.signalData as Record<string, unknown>;
+                  const signalData = (node.signalData ?? {}) as Record<string, unknown>;
                   return (
                     <div key={node.id} className="relative animate-fade-in">
                       {/* Timeline dot */}
@@ -643,7 +643,7 @@ export default function NarrativeTreeDetailPage() {
                         <div className="flex items-start justify-between gap-3 mb-3">
                           <div className="flex items-center gap-2 flex-wrap">
                             <Badge variant="secondary" className="text-xs font-bold bg-zinc-800 text-zinc-300 border-0">
-                              {piece.brand.name}
+                              {piece.brand?.name ?? "Unknown"}
                             </Badge>
                             <Badge className={`text-[10px] font-bold uppercase tracking-wide border ${contentStatusColor(piece.status)}`}>
                               {piece.status}
@@ -739,7 +739,7 @@ export default function NarrativeTreeDetailPage() {
 // ─── Dossier Sub-Component ──────────────────────────────────────────────────
 
 function DossierView({ dossier }: { dossier: FactDossier }) {
-  const data = dossier.structuredData;
+  const data = (dossier.structuredData ?? {}) as FactDossier["structuredData"];
 
   return (
     <div className="space-y-6 animate-fade-in">
