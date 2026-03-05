@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { callGemini, callGeminiResearch } from "@/lib/gemini";
+import { processSignalsToTrees } from "@/lib/ingestHelper";
 
 const TREND_ENGINE_PROMPT = `You are TREND_ENGINE. Your job is to identify and rank the most important trending topics right now for an Indian content creator focused on governance, geopolitics, and economic accountability.
 
@@ -93,7 +94,30 @@ export async function POST() {
       include: { trends: true },
     });
 
-    return NextResponse.json(batch, { status: 201 });
+    // Auto-sync to NarrativeTrees — cluster new signals into existing or new trees
+    const signals = ranked.map(
+      (t: { rank: number; topic: string; score: number; reason: string }) => ({
+        title: t.topic || "",
+        score: t.score || 0,
+        reason: t.reason || "",
+        source: "khabri_auto",
+        metadata: { rank: t.rank, batchId: batch.id },
+      })
+    );
+
+    const treeResult = await processSignalsToTrees(signals);
+
+    return NextResponse.json(
+      {
+        ...batch,
+        narrativeTreeSync: {
+          newTrees: treeResult.newTrees,
+          appendedTo: treeResult.appendedTo,
+          skipped: treeResult.skipped,
+        },
+      },
+      { status: 201 }
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("Trend fetch error:", message);
