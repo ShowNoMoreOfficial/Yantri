@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import CopyButton from "@/components/CopyButton";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -58,6 +59,74 @@ const ImageIcon = () => (
   </svg>
 );
 
+const SpinnerIcon = () => (
+  <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+  </svg>
+);
+
+function ImagePromptBlock({
+  prompt,
+  imageKey,
+  generatedImages,
+  loadingImages,
+  onGenerate,
+}: {
+  prompt: string;
+  imageKey: string;
+  generatedImages: Record<string, string>;
+  loadingImages: Record<string, boolean>;
+  onGenerate: (key: string, prompt: string) => void;
+}) {
+  const isLoading = loadingImages[imageKey];
+  const imageData = generatedImages[imageKey];
+
+  return (
+    <div className="mt-3 space-y-2">
+      <div className="flex items-center gap-2 text-xs text-indigo-400 bg-indigo-500/5 rounded-lg px-3 py-1.5 border border-indigo-500/10">
+        <ImageIcon />
+        <span className="flex-1">{prompt}</span>
+        <button
+          onClick={() => onGenerate(imageKey, prompt)}
+          disabled={isLoading}
+          className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isLoading ? (
+            <>
+              <SpinnerIcon />
+              <span>Generating...</span>
+            </>
+          ) : (
+            <>
+              <ImageIcon />
+              <span>Generate Image</span>
+            </>
+          )}
+        </button>
+      </div>
+      {imageData && (
+        <div className="rounded-lg overflow-hidden border border-indigo-500/20">
+          <img
+            src={`data:image/png;base64,${imageData}`}
+            alt="Generated image"
+            className="w-full max-h-80 object-contain bg-black/50"
+          />
+          <div className="flex justify-end p-2 bg-zinc-900/50">
+            <a
+              href={`data:image/png;base64,${imageData}`}
+              download="generated-image.png"
+              className="text-xs text-indigo-400 hover:text-indigo-300 font-medium"
+            >
+              Download
+            </a>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PostingPlan({ postingPlan, isThread }: { postingPlan: TwitterDeliverable["postingPlan"]; isThread: boolean }) {
   return (
     <Card className="rounded-xl border-border p-5 bg-zinc-900/50">
@@ -95,7 +164,17 @@ function PostingPlan({ postingPlan, isThread }: { postingPlan: TwitterDeliverabl
   );
 }
 
-function SingleTweetView({ data }: { data: TwitterDeliverable }) {
+function SingleTweetView({
+  data,
+  generatedImages,
+  loadingImages,
+  onGenerate,
+}: {
+  data: TwitterDeliverable;
+  generatedImages: Record<string, string>;
+  loadingImages: Record<string, boolean>;
+  onGenerate: (key: string, prompt: string) => void;
+}) {
   const { content, postingPlan } = data;
   const tweetText = content.tweet ?? "";
   const charCount = content.character_count ?? tweetText.length;
@@ -138,10 +217,13 @@ function SingleTweetView({ data }: { data: TwitterDeliverable }) {
           {tweetText}
         </p>
         {content.nano_banana_prompt && (
-          <div className="mt-3 flex items-center gap-2 text-xs text-indigo-400 bg-indigo-500/5 rounded-lg px-3 py-1.5 border border-indigo-500/10">
-            <ImageIcon />
-            <span>{content.nano_banana_prompt}</span>
-          </div>
+          <ImagePromptBlock
+            prompt={content.nano_banana_prompt}
+            imageKey="single"
+            generatedImages={generatedImages}
+            loadingImages={loadingImages}
+            onGenerate={onGenerate}
+          />
         )}
       </Card>
 
@@ -150,7 +232,17 @@ function SingleTweetView({ data }: { data: TwitterDeliverable }) {
   );
 }
 
-function ThreadView({ data }: { data: TwitterDeliverable }) {
+function ThreadView({
+  data,
+  generatedImages,
+  loadingImages,
+  onGenerate,
+}: {
+  data: TwitterDeliverable;
+  generatedImages: Record<string, string>;
+  loadingImages: Record<string, boolean>;
+  onGenerate: (key: string, prompt: string) => void;
+}) {
   const { content, postingPlan } = data;
   const tweets = content.tweets ?? [];
   const threadLength = content.thread_length ?? tweets.length;
@@ -210,6 +302,15 @@ function ThreadView({ data }: { data: TwitterDeliverable }) {
                     <span>{tweet.media_notes}</span>
                   </div>
                 )}
+                {tweet.nano_banana_prompt && (
+                  <ImagePromptBlock
+                    prompt={tweet.nano_banana_prompt}
+                    imageKey={`thread-${tweet.position}`}
+                    generatedImages={generatedImages}
+                    loadingImages={loadingImages}
+                    onGenerate={onGenerate}
+                  />
+                )}
               </div>
               <CopyButton text={tweet.text} />
             </div>
@@ -230,12 +331,47 @@ function ThreadView({ data }: { data: TwitterDeliverable }) {
 }
 
 export default function TwitterPreview({ data }: { data: TwitterDeliverable }) {
-  // Determine format: explicit format field, or infer from content shape
+  const [generatedImages, setGeneratedImages] = useState<Record<string, string>>({});
+  const [loadingImages, setLoadingImages] = useState<Record<string, boolean>>({});
+
+  const handleGenerateImage = useCallback(async (key: string, prompt: string) => {
+    setLoadingImages((prev) => ({ ...prev, [key]: true }));
+    try {
+      const res = await fetch("/api/yantri/generate-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to generate image");
+      setGeneratedImages((prev) => ({ ...prev, [key]: data.image }));
+    } catch (err) {
+      console.error("Image generation failed:", err);
+      alert(err instanceof Error ? err.message : "Image generation failed");
+    } finally {
+      setLoadingImages((prev) => ({ ...prev, [key]: false }));
+    }
+  }, []);
+
   const isThread = data.format === "thread" || (!data.format && Array.isArray(data.content.tweets));
 
   if (isThread) {
-    return <ThreadView data={data} />;
+    return (
+      <ThreadView
+        data={data}
+        generatedImages={generatedImages}
+        loadingImages={loadingImages}
+        onGenerate={handleGenerateImage}
+      />
+    );
   }
 
-  return <SingleTweetView data={data} />;
+  return (
+    <SingleTweetView
+      data={data}
+      generatedImages={generatedImages}
+      loadingImages={loadingImages}
+      onGenerate={handleGenerateImage}
+    />
+  );
 }
