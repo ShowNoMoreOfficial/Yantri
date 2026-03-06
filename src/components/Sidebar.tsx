@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, memo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { LayoutDashboard, Inbox, TrendingUp, Building2, ShieldCheck, Clock, BarChart3, GitBranch, FileText, LogOut, Menu, X } from "lucide-react";
+import { LayoutDashboard, Inbox, TrendingUp, Building2, ShieldCheck, Clock, BarChart3, GitBranch, FileText, LogOut, Menu, X, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const navItems = [
@@ -18,6 +18,26 @@ const navItems = [
   { href: "/performance", label: "Performance", icon: BarChart3 },
   { href: "/prompt-library", label: "Prompt Library", icon: FileText },
 ];
+
+const NavItem = memo(function NavItem({ href, label, icon: Icon, isActive }: {
+  href: string; label: string; icon: LucideIcon; isActive: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm transition-all duration-300 group ${isActive
+        ? "bg-white/10 text-white font-bold shadow-lg shadow-black/20"
+        : "text-zinc-400 hover:text-white hover:bg-white/5"
+      }`}
+    >
+      <Icon className={`w-5 h-5 transition-colors duration-300 ${isActive ? "text-indigo-400" : "text-zinc-500 group-hover:text-zinc-300"}`} />
+      {label}
+      {isActive && (
+        <div className="ml-auto w-1.5 h-1.5 bg-indigo-500 rounded-full shadow-[0_0_8px_rgba(99,102,241,0.6)]" />
+      )}
+    </Link>
+  );
+});
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -64,26 +84,15 @@ export default function Sidebar() {
         <div className="px-4 mb-4">
           <span className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.2em]">Engineering</span>
         </div>
-        {navItems.map((item) => {
-          const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm transition-all duration-300 group ${isActive
-                ? "bg-white/10 text-white font-bold shadow-lg shadow-black/20"
-                : "text-zinc-400 hover:text-white hover:bg-white/5"
-              }`}
-            >
-              <Icon className={`w-5 h-5 transition-colors duration-300 ${isActive ? "text-indigo-400" : "text-zinc-500 group-hover:text-zinc-300"}`} />
-              {item.label}
-              {isActive && (
-                <div className="ml-auto w-1.5 h-1.5 bg-indigo-500 rounded-full shadow-[0_0_8px_rgba(99,102,241,0.6)]" />
-              )}
-            </Link>
-          );
-        })}
+        {navItems.map((item) => (
+          <NavItem
+            key={item.href}
+            href={item.href}
+            label={item.label}
+            icon={item.icon}
+            isActive={pathname === item.href || pathname?.startsWith(item.href + "/") || false}
+          />
+        ))}
       </nav>
 
       <div className="p-6 border-t border-white/5 mt-auto">

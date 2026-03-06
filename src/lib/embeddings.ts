@@ -1,23 +1,27 @@
-import { GoogleGenAI } from "@google/genai";
+import { prisma } from "@/lib/prisma";
 
 /**
- * Embedding module — real Gemini embeddings + shared similarity utilities.
+ * Embedding module — Gemini embeddings + pgvector similarity search.
  *
  * Uses Gemini text-embedding-004 for semantic vector generation.
- * Exports cosine similarity and tree matching functions used by both
- * the ingest API and the content pipeline.
+ * Uses pgvector cosine distance operator (<=>)  for efficient tree matching
+ * instead of loading all trees into memory.
  */
+
+// Re-use the singleton Gemini client from gemini.ts
+import { GoogleGenAI } from "@google/genai";
 
 const SIMILARITY_THRESHOLD = 0.85;
 
-let genAIInstance: GoogleGenAI | null = null;
+const globalForEmbedding = globalThis as unknown as {
+  embeddingGenAI: GoogleGenAI | undefined;
+};
 
-function getGenAI(): GoogleGenAI {
-  if (!genAIInstance) {
-    genAIInstance = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-  }
-  return genAIInstance;
-}
+const genAI =
+  globalForEmbedding.embeddingGenAI ??
+  new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+
+if (process.env.NODE_ENV !== "production") globalForEmbedding.embeddingGenAI = genAI;
 
 /**
  * Generate an embedding vector for the given text using Gemini text-embedding-004.
@@ -26,7 +30,6 @@ function getGenAI(): GoogleGenAI {
  * @returns A 768-dimensional vector of floats
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
-  const genAI = getGenAI();
   const result = await genAI.models.embedContent({
     model: "text-embedding-004",
     contents: text,
@@ -73,35 +76,63 @@ export interface SimilarTreeResult {
 
 /**
  * Find the most semantically similar active NarrativeTree.
- * Loads all active tree embeddings and compares in-memory using cosine similarity.
+ *
+ * Uses pgvector's cosine distance operator (<=>) for efficient database-level
+ * similarity search instead of loading all trees into memory.
+ * Falls back to in-memory comparison if pgvector cast fails.
  */
 export async function findSimilarTree(
   embedding: number[],
   // Accept any Prisma-like client that has narrativeTree.findMany
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  prismaClient: any,
+  prismaClient: any = prisma,
   threshold: number = SIMILARITY_THRESHOLD
 ): Promise<SimilarTreeResult | null> {
-  const trees = await prismaClient.narrativeTree.findMany({
-    where: { embedding: { not: null }, status: "ACTIVE" },
-    select: { id: true, rootTrend: true, embedding: true },
-  });
+  const vectorStr = toPgVector(embedding);
 
-  let best: SimilarTreeResult | null = null;
+  // Try pgvector cosine distance search first (fast, database-level)
+  try {
+    const results: Array<{ id: string; rootTrend: string; distance: number }> =
+      await prismaClient.$queryRawUnsafe(
+        `SELECT id, "rootTrend", 1 - (embedding::vector <=> $1::vector) AS distance
+         FROM "NarrativeTree"
+         WHERE embedding IS NOT NULL AND status = 'ACTIVE'
+         ORDER BY embedding::vector <=> $1::vector
+         LIMIT 1`,
+        vectorStr
+      );
 
-  for (const tree of trees) {
-    if (!tree.embedding) continue;
-    try {
-      const treeEmbedding: number[] = JSON.parse(tree.embedding);
-      if (!Array.isArray(treeEmbedding) || treeEmbedding.length !== embedding.length) continue;
-      const sim = cosineSimilarity(embedding, treeEmbedding);
-      if (sim > threshold && (!best || sim > best.similarity)) {
-        best = { id: tree.id, rootTrend: tree.rootTrend, similarity: sim };
-      }
-    } catch {
-      continue;
+    if (results.length > 0 && results[0].distance >= threshold) {
+      return {
+        id: results[0].id,
+        rootTrend: results[0].rootTrend,
+        similarity: results[0].distance,
+      };
     }
-  }
+    return null;
+  } catch {
+    // pgvector cast failed — fall back to in-memory (legacy path)
+    const trees = await prismaClient.narrativeTree.findMany({
+      where: { embedding: { not: null }, status: "ACTIVE" },
+      select: { id: true, rootTrend: true, embedding: true },
+    });
 
-  return best;
+    let best: SimilarTreeResult | null = null;
+
+    for (const tree of trees) {
+      if (!tree.embedding) continue;
+      try {
+        const treeEmbedding: number[] = JSON.parse(tree.embedding);
+        if (!Array.isArray(treeEmbedding) || treeEmbedding.length !== embedding.length) continue;
+        const sim = cosineSimilarity(embedding, treeEmbedding);
+        if (sim > threshold && (!best || sim > best.similarity)) {
+          best = { id: tree.id, rootTrend: tree.rootTrend, similarity: sim };
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    return best;
+  }
 }

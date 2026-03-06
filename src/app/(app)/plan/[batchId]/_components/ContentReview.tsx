@@ -1,13 +1,36 @@
 "use client";
 
-import { useRef, useState } from "react";
-import TwitterPreview from "./TwitterPreview";
-import YouTubePreview from "./YouTubePreview";
-import BlogPreview from "./BlogPreview";
-import MetaPreview from "./MetaPreview";
-import LinkedInPreview from "./LinkedInPreview";
+import { useRef, useState, useCallback, useMemo } from "react";
+import dynamic from "next/dynamic";
 import InlineEditToolbar from "@/components/InlineEditToolbar";
 import { toast } from "sonner";
+
+function PreviewSkeleton() {
+  return (
+    <div className="animate-pulse space-y-3 p-4">
+      <div className="h-4 bg-zinc-800 rounded w-3/4" />
+      <div className="h-4 bg-zinc-800 rounded w-1/2" />
+      <div className="h-32 bg-zinc-800 rounded" />
+      <div className="h-4 bg-zinc-800 rounded w-2/3" />
+    </div>
+  );
+}
+
+const TwitterPreview = dynamic(() => import("./TwitterPreview"), {
+  loading: () => <PreviewSkeleton />,
+});
+const YouTubePreview = dynamic(() => import("./YouTubePreview"), {
+  loading: () => <PreviewSkeleton />,
+});
+const BlogPreview = dynamic(() => import("./BlogPreview"), {
+  loading: () => <PreviewSkeleton />,
+});
+const MetaPreview = dynamic(() => import("./MetaPreview"), {
+  loading: () => <PreviewSkeleton />,
+});
+const LinkedInPreview = dynamic(() => import("./LinkedInPreview"), {
+  loading: () => <PreviewSkeleton />,
+});
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 interface ContentReviewProps {
@@ -20,6 +43,21 @@ export default function ContentReview({ deliverable, onUpdate }: ContentReviewPr
   const containerRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState(deliverable);
 
+  const handleRewrite = useCallback((original: string, rewritten: string) => {
+    setData((prev: typeof deliverable) => {
+      const json = JSON.stringify(prev);
+      const updated = JSON.parse(json.replace(original, rewritten));
+      onUpdate?.(updated);
+      toast.success("Text updated");
+      return updated;
+    });
+  }, [onUpdate]);
+
+  const contextStr = useMemo(
+    () => data?.content ? JSON.stringify(data.content).slice(0, 2000) : "",
+    [data?.content]
+  );
+
   if (!data?.platform) {
     return (
       <div className="text-sm text-muted-foreground p-4">
@@ -28,17 +66,7 @@ export default function ContentReview({ deliverable, onUpdate }: ContentReviewPr
     );
   }
 
-  function handleRewrite(original: string, rewritten: string) {
-    // Deep replace the original text in the deliverable JSON
-    const json = JSON.stringify(data);
-    const updated = JSON.parse(json.replace(original, rewritten));
-    setData(updated);
-    onUpdate?.(updated);
-    toast.success("Text updated");
-  }
-
   const platform = data.platform.toLowerCase();
-  const contextStr = JSON.stringify(data.content).slice(0, 2000);
 
   return (
     <div ref={containerRef} className="relative">

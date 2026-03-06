@@ -61,6 +61,8 @@ model NarrativeTree {
   deliverables  Deliverable[]
   createdAt     DateTime                    @default(now())
   updatedAt     DateTime                    @updatedAt
+
+  @@index([status])
 }
 
 enum NarrativeTreeStatus {
@@ -330,4 +332,5 @@ model PerformanceData {
 
   @@index([platform])
   @@index([brandName])
+  @@index([recordedAt])
 }
