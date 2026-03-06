@@ -12,29 +12,36 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No prompt provided" }, { status: 400 });
     }
 
-    const response = await genAI.models.generateImages({
-      model: "imagen-3.0-generate-002",
-      prompt: prompt,
+    const response = await genAI.models.generateContent({
+      model: "gemini-3.1-flash-image-preview",
+      contents: prompt,
       config: {
-        numberOfImages: 1,
-        outputMimeType: "image/jpeg",
-        aspectRatio: "16:9", // Social media standard, could be customized per platform
+        responseModalities: ["IMAGE", "TEXT"],
       },
     });
 
-    if (!response.generatedImages || response.generatedImages.length === 0) {
+    // Extract image part from response
+    const parts = response.candidates?.[0]?.content?.parts;
+    if (!parts) {
       return NextResponse.json(
         { error: "Image generation failed or returned empty." },
         { status: 500 }
       );
     }
 
-    // GoogleGenAI SDK returns image data as base64 in `image.imageBytes`
-    const imageBase64 = response.generatedImages![0].image!.imageBytes;
+    const imagePart = parts.find((p: { inlineData?: { mimeType?: string } }) => p.inlineData?.mimeType?.startsWith("image/"));
+    if (!imagePart?.inlineData) {
+      return NextResponse.json(
+        { error: "No image in response." },
+        { status: 500 }
+      );
+    }
+
+    const { mimeType, data } = imagePart.inlineData;
 
     return NextResponse.json({
       success: true,
-      image: `data:image/jpeg;base64,${imageBase64}`,
+      image: `data:${mimeType};base64,${data}`,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
