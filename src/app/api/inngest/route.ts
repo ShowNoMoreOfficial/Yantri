@@ -7,6 +7,11 @@ import {
   gapAnalysisOnIngest,
 } from "@/lib/inngest/functions";
 import { contentPipeline } from "@/lib/inngest/pipeline";
+import {
+  viralMicroPipeline,
+  carouselPipeline,
+  cinematicPipeline,
+} from "@/lib/inngest/deliverablePipelines";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
@@ -16,5 +21,9 @@ export const { GET, POST, PUT } = serve({
     factDossierSync,
     contentPipeline,
     gapAnalysisOnIngest,
+    // v4 Deliverable pipelines
+    viralMicroPipeline,
+    carouselPipeline,
+    cinematicPipeline,
   ],
 });

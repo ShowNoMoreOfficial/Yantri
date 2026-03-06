@@ -42,6 +42,7 @@ model Brand {
   updatedAt            DateTime       @updatedAt
   contentPieces        ContentPiece[]
   narratives           Narrative[]
+  deliverables         Deliverable[]
 
   @@index([isActive])
 }
@@ -57,6 +58,7 @@ model NarrativeTree {
   nodes         NarrativeNode[]
   dossier       FactDossier?
   contentPieces ContentPiece[]
+  deliverables  Deliverable[]
   createdAt     DateTime                    @default(now())
   updatedAt     DateTime                    @updatedAt
 }
@@ -136,11 +138,80 @@ enum Platform {
 enum ContentStatus {
   PLANNED
   RESEARCHING
+  SCRIPTING
+  GENERATING_ASSETS
+  STORYBOARDING
   DRAFTED
+  REVIEW
   APPROVED
   RELAYED
   PUBLISHED
   KILLED
+}
+
+enum AssetType {
+  IMAGE
+  VIDEO_CLIP
+  BROLL
+  CAROUSEL_SLIDE
+  THUMBNAIL
+  SOCIAL_CARD
+}
+
+enum DeliverableStatus {
+  PLANNED
+  RESEARCHING
+  SCRIPTING
+  GENERATING_ASSETS
+  STORYBOARDING
+  REVIEW
+  APPROVED
+  RELAYED
+  PUBLISHED
+  KILLED
+}
+
+// ─── Deliverables (v4 Rich Asset Pipeline) ──────────────────────────────────
+
+model Deliverable {
+  id              String            @id @default(cuid())
+  brandId         String
+  brand           Brand             @relation(fields: [brandId], references: [id])
+  treeId          String?
+  tree            NarrativeTree?    @relation(fields: [treeId], references: [id])
+  platform        Platform
+  pipelineType    String            @default("standard") // standard, viral_micro, carousel, cinematic
+  status          DeliverableStatus @default(PLANNED)
+  copyMarkdown    String?           @db.Text
+  storyboardUrl   String?           // Link to Figma/Canva generated via MCP
+  scriptData      Json?             // Full script structure for YouTube
+  carouselData    Json?             // Slide-by-slide carousel data
+  postingPlan     Json?             // Timing, hashtags, engagement strategy
+  researchPrompt  String?           @db.Text
+  factDossierId   String?
+  assets          Asset[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([brandId])
+  @@index([status])
+  @@index([platform])
+  @@index([pipelineType])
+}
+
+model Asset {
+  id              String      @id @default(cuid())
+  deliverableId   String
+  deliverable     Deliverable @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+  type            AssetType
+  url             String
+  promptUsed      String?     @db.Text
+  slideIndex      Int?        // For carousel slides — ordering
+  metadata        Json?       // Additional metadata (dimensions, duration, etc.)
+  createdAt       DateTime    @default(now())
+
+  @@index([deliverableId])
+  @@index([type])
 }
 
 // ─── Prompt Templates (Dynamic Prompt Library) ──────────────────────────────
