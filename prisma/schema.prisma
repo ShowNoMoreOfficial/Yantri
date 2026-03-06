@@ -158,6 +158,7 @@ enum AssetType {
   CAROUSEL_SLIDE
   THUMBNAIL
   SOCIAL_CARD
+  AUDIO
 }
 
 enum DeliverableStatus {

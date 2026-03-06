@@ -18,6 +18,7 @@ import { runCarouselEngine } from "@/lib/engines/carousel";
 import { runCinematicEngine } from "@/lib/engines/cinematic";
 import { generateVisualPrompts } from "@/lib/engines/nanoBanana";
 import { generateEmbedding, findSimilarTree } from "@/lib/embeddings";
+import { generateVoiceover } from "@/lib/elevenlabs";
 
 // ─── Event Types ────────────────────────────────────────────────────────────
 
@@ -132,6 +133,7 @@ export const viralMicroPipeline = inngest.createFunction(
   {
     id: "viral-micro-pipeline",
     retries: 2,
+    concurrency: { limit: 5 },
   },
   { event: "yantri/deliverable.viral-micro" },
   async ({ event, step }) => {
@@ -269,6 +271,7 @@ export const carouselPipeline = inngest.createFunction(
   {
     id: "carousel-pipeline",
     retries: 2,
+    concurrency: { limit: 3 },
   },
   { event: "yantri/deliverable.carousel" },
   async ({ event, step }) => {
@@ -394,6 +397,7 @@ export const cinematicPipeline = inngest.createFunction(
   {
     id: "cinematic-pipeline",
     retries: 2,
+    concurrency: { limit: 2 },
   },
   { event: "yantri/deliverable.cinematic" },
   async ({ event, step }) => {
@@ -477,7 +481,35 @@ export const cinematicPipeline = inngest.createFunction(
       });
     });
 
-    // Step 5: Storyboarding — create frame assets
+    // Step 5: Voiceover — generate narration audio from script
+    await step.run("generate-voiceover", async () => {
+      // Strip production cues like [GRAPHIC: ...] and [MUSIC: ...] from script
+      const cleanScript = cinematicResult.script.fullScript
+        .replace(/\[(?:GRAPHIC|MUSIC|SFX|CUT|TRANSITION|B-ROLL)[^\]]*\]/gi, "")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+
+      if (!cleanScript) return;
+
+      const result = await generateVoiceover(cleanScript);
+
+      await prisma.asset.create({
+        data: {
+          deliverableId,
+          type: "AUDIO",
+          url: "", // Populated when audio is uploaded to storage
+          metadata: {
+            voiceId: result.voiceId,
+            modelId: result.modelId,
+            sectionCount: cinematicResult.script.sections.length,
+            runtimeEstimate: cinematicResult.script.runtimeEstimate,
+            audioSizeBytes: result.audio.length,
+          },
+        },
+      });
+    });
+
+    // Step 6: Storyboarding — create frame assets
     await step.run("set-storyboarding", async () => {
       await prisma.deliverable.update({
         where: { id: deliverableId },

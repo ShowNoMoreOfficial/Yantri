@@ -27,6 +27,7 @@ export const narrativeResearch = inngest.createFunction(
   {
     id: "narrative-research",
     retries: 2,
+    concurrency: { limit: 3 },
   },
   { event: "yantri/narrative.research" },
   async ({ event, step }) => {
@@ -94,6 +95,7 @@ export const narrativeGenerate = inngest.createFunction(
   {
     id: "narrative-generate",
     retries: 2,
+    concurrency: { limit: 3 },
   },
   { event: "yantri/narrative.generate" },
   async ({ event, step }) => {
@@ -164,6 +166,7 @@ export const factDossierSync = inngest.createFunction(
   {
     id: "fact-dossier-sync",
     retries: 2,
+    concurrency: { limit: 2 },
   },
   { event: "yantri/dossier.build" },
   async ({ event, step }) => {
@@ -267,6 +270,7 @@ export const gapAnalysisOnIngest = inngest.createFunction(
   {
     id: "gap-analysis-on-ingest",
     retries: 2,
+    concurrency: { limit: 3 },
   },
   { event: "yantri/tree.updated" },
   async ({ event, step }) => {

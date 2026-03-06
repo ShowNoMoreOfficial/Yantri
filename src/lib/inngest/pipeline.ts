@@ -29,6 +29,7 @@ export const contentPipeline = inngest.createFunction(
   {
     id: "content-pipeline",
     retries: 2,
+    concurrency: { limit: 3 },
   },
   { event: "yantri/pipeline.run" },
   async ({ event, step }) => {
