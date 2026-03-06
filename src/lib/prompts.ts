@@ -529,34 +529,53 @@ OUTPUT FORMAT (respond in JSON only):
 }
 
 function buildBlogPrompt(ctx: string): { systemPrompt: string; userMessage: string } {
-  const systemPrompt = `You are the Blog Engine — a long-form editorial writer for a data-driven news brand. You produce complete, publish-ready articles. Not outlines — THE FULL ARTICLE with SEO optimization.
+  const systemPrompt = `You are the Blog Engine — a long-form editorial writer for a data-driven news brand. You produce complete, publish-ready articles. Not outlines — THE FULL ARTICLE with SEO optimization, complete metadata, and a featured image prompt.
 
 ${ctx}
 
 INSTRUCTIONS:
-1. Write a complete article (1200-2500 words) with proper heading hierarchy (H1, H2, H3).
+1. Write a complete article (1200-2500 words) with proper heading hierarchy using markdown heading tags (## for H2, ### for H3 — the title itself is H1).
 2. Format: Choose the best format for this narrative — Explainer, Timeline, Data Analysis, or Policy Breakdown.
 3. Lead with the most compelling finding from the research. Don't bury the lede.
 4. Every claim must be backed by data from the research dossier with source attribution.
-5. Use subheadings every 200-300 words for scannability.
+5. Use subheadings (## and ###) every 200-300 words for scannability.
 6. Include a strong conclusion with forward-looking implications.
 7. Write in the brand's voice and language.
-8. The article text should be in markdown format.
+8. The article text MUST be in proper markdown format with:
+   - **Bold** for emphasis, *italic* for terms
+   - ## H2 and ### H3 subheadings (NOT H1 — the title is separate)
+   - Bullet points and numbered lists where appropriate
+   - > Blockquotes for key stats or expert quotes
+   - Horizontal rules (---) between major sections if needed
+9. Generate a detailed image prompt for a featured image (1280x720). The image should be editorial, photojournalistic or infographic-style — NO text in the image. Describe composition, mood, color palette, and subject matter that captures the article's core theme.
 
 OUTPUT FORMAT (respond in JSON only):
 {
   "platform": "blog",
   "content": {
-    "article": "# Headline\\n\\nFull markdown article text...",
+    "article": "## First Section Heading\\n\\nFull markdown article text...",
     "word_count": 1800,
-    "format_type": "explainer|timeline|data_analysis|policy_breakdown"
+    "format_type": "explainer|timeline|data_analysis|policy_breakdown",
+    "featured_image_prompt": "A detailed prompt describing the featured image for this article — editorial style, 1280x720, no text overlay"
   },
   "postingPlan": {
+    "title": "The main article title as it appears on the blog",
+    "english_title_slug": "kebab-case-url-slug-for-permalink",
+    "summary": "A 1-2 sentence summary of the article for preview cards (max 250 chars)",
     "seo_title": "SEO-optimized title with focus keyphrase in first 60 chars",
     "meta_description": "155-character meta description with primary keyword",
+    "og_title": "Open Graph title optimized for social sharing (max 60 chars)",
+    "og_description": "Open Graph description for social previews (max 200 chars)",
+    "twitter_title": "Twitter card title (max 70 chars)",
+    "twitter_description": "Twitter card description (max 200 chars)",
+    "meta_keywords": "comma, separated, keywords, for, meta, tag",
+    "meta_news_keywords": "comma, separated, news-specific, keywords",
+    "primary_category": "News|Technology|Policy|Analysis|Investigation",
+    "additional_category": "optional secondary category or empty string",
+    "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
     "focus_keyphrase": "main keyword phrase",
     "secondary_keyphrases": ["keyphrase1", "keyphrase2"],
-    "tags": ["tag1", "tag2", "tag3"],
+    "banner_description": "Caption for the featured image (used as alt text and image credit line)",
     "time_ist": "9:00 AM",
     "time_reasoning": "Morning publishing captures search traffic for the day"
   }

@@ -5,40 +5,43 @@ const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
 export async function POST(request: Request) {
   try {
-    const { prompt } = await request.json();
+    const body = await request.json();
+    const { prompt } = body;
 
-    if (!prompt || typeof prompt !== "string") {
-      return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
+    if (!prompt) {
+      return NextResponse.json({ error: "No prompt provided" }, { status: 400 });
     }
 
-    const response = await genAI.models.generateContent({
-      model: "gemini-3.1-flash-image-preview",
-      contents: `Generate an image based on this prompt: ${prompt}`,
+    const response = await genAI.models.generateImages({
+      model: "imagen-3.0-generate-002",
+      prompt: prompt,
       config: {
-        responseModalities: ["IMAGE", "TEXT"],
+        numberOfImages: 1,
+        outputMimeType: "image/jpeg",
+        aspectRatio: "16:9", // Social media standard, could be customized per platform
       },
     });
 
-    const parts = response.candidates?.[0]?.content?.parts;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const imagePart = parts?.find((p: any) => p.inlineData);
-
-    if (!imagePart || !imagePart.inlineData) {
+    if (!response.generatedImages || response.generatedImages.length === 0) {
       return NextResponse.json(
-        { error: "No image generated" },
+        { error: "Image generation failed or returned empty." },
         { status: 500 }
       );
     }
 
-    const { data, mimeType } = imagePart.inlineData as { data: string; mimeType: string };
+    // GoogleGenAI SDK returns image data as base64 in `image.imageBytes`
+    const imageBase64 = response.generatedImages![0].image!.imageBytes;
 
     return NextResponse.json({
-      image: data,
-      mimeType: mimeType || "image/png",
+      success: true,
+      image: `data:image/jpeg;base64,${imageBase64}`,
     });
-  } catch (error) {
-    console.error("Image generation failed:", error);
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("Generate Image error:", message);
+    return NextResponse.json(
+      { error: `Image generation failed: ${message}` },
+      { status: 500 }
+    );
   }
 }
