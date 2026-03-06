@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import CopyButton from "@/components/CopyButton";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -249,7 +251,7 @@ export default function BlogPreview({ data }: { data: BlogDeliverable }) {
           <Card className="rounded-xl border-border p-5">
             <div className="flex items-center justify-between mb-3">
               <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-400 border-none text-xs">
-                {content.word_count} words &middot; HTML
+                {content.word_count} words &middot; Markdown
               </Badge>
               <CopyButton text={content.article} />
             </div>
@@ -272,10 +274,9 @@ export default function BlogPreview({ data }: { data: BlogDeliverable }) {
                   );
                 }
                 return (
-                  <div
-                    key={`section-${i}`}
-                    dangerouslySetInnerHTML={{ __html: section.html }}
-                  />
+                  <div key={`section-${i}`}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{section.html}</ReactMarkdown>
+                  </div>
                 );
               })}
             </article>
