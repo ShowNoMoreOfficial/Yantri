@@ -26,7 +26,7 @@ export async function POST(request: Request) {
       ? (narrative.brand.voiceRules as string[]).join("; ")
       : String(narrative.brand.voiceRules);
 
-    const { systemPrompt, userMessage } = buildContentGenerationPrompt(
+    const { systemPrompt, userMessage } = await buildContentGenerationPrompt(
       narrative.platform,
       narrative.angle,
       narrative.format,

@@ -16,7 +16,7 @@ const navItems = [
   { href: "/platform-rules", label: "Platform Rules", icon: ShieldCheck },
   { href: "/history", label: "History", icon: Clock },
   { href: "/performance", label: "Performance", icon: BarChart3 },
-  { href: "/prompts", label: "Prompt Library", icon: FileText },
+  { href: "/prompt-library", label: "Prompt Library", icon: FileText },
 ];
 
 export default function Sidebar() {

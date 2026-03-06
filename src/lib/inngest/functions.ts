@@ -122,7 +122,7 @@ export const narrativeGenerate = inngest.createFunction(
         ? (narrative.brand.voiceRules as string[]).join("; ")
         : JSON.stringify(narrative.brand.voiceRules);
 
-      const { systemPrompt, userMessage } = buildContentGenerationPrompt(
+      const { systemPrompt, userMessage } = await buildContentGenerationPrompt(
         narrative.platform,
         narrative.angle,
         narrative.format,
@@ -243,6 +243,7 @@ RULES:
           treeId,
           structuredData: dossierData.structuredData as object,
           sources: dossierData.sources,
+          visualAssets: [],
           rawResearch: dossierData.rawResearch,
         },
         update: {

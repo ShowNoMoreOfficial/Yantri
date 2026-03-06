@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-// Split-view layout replaces tabs — no tabs import needed
 import { ScrollArea } from "@/components/ui/scroll-area";
+
+const TreeVisualizer = dynamic(() => import("../TreeVisualizer"), { ssr: false });
 import {
   AlertDialog,
   AlertDialogAction,
@@ -44,6 +46,7 @@ import { toast } from "sonner";
 interface NarrativeNode {
   id: string;
   treeId: string;
+  nodeType: string;
   signalTitle: string;
   signalScore: number;
   signalData: Record<string, unknown>;
@@ -168,6 +171,11 @@ export default function NarrativeTreeDetailPage() {
   const [dossierBuilding, setDossierBuilding] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [viewMode, setViewMode] = useState<"list" | "graph">("list");
+  const [allTrees, setAllTrees] = useState<{ id: string; rootTrend: string; status: string }[]>([]);
+  const [hypothesisInput, setHypothesisInput] = useState("");
+  const [showHypothesisDialog, setShowHypothesisDialog] = useState(false);
+  const [addingHypothesis, setAddingHypothesis] = useState(false);
 
   const fetchTree = useCallback(async () => {
     try {
@@ -192,6 +200,14 @@ export default function NarrativeTreeDetailPage() {
 
   useEffect(() => {
     fetchTree();
+    // Fetch all trees for merge dropdown
+    fetch("/api/narrative-trees")
+      .then((r) => r.json())
+      .then((data) => {
+        const list = Array.isArray(data) ? data : data.trees ?? [];
+        setAllTrees(list);
+      })
+      .catch(() => {});
   }, [fetchTree]);
 
   async function updateStatus(newStatus: string) {
@@ -244,6 +260,43 @@ export default function NarrativeTreeDetailPage() {
       toast.error("Failed to build dossier. The fact-engine endpoint may not be available yet.");
     } finally {
       setDossierBuilding(false);
+    }
+  }
+
+  async function addHypothesis() {
+    if (!hypothesisInput.trim()) return;
+    setAddingHypothesis(true);
+    try {
+      const res = await fetch(`/api/narrative-trees/${treeId}/hypothesis`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scenario: hypothesisInput }),
+      });
+      if (!res.ok) throw new Error("Failed to add hypothesis");
+      toast.success("What-If scenario added");
+      setHypothesisInput("");
+      setShowHypothesisDialog(false);
+      await fetchTree();
+    } catch {
+      toast.error("Failed to add hypothesis");
+    } finally {
+      setAddingHypothesis(false);
+    }
+  }
+
+  async function handleMerge(sourceId: string, targetId: string) {
+    if (!confirm(`Merge this tree into the target? This will move all signals and content.`)) return;
+    try {
+      const res = await fetch("/api/narrative-trees/merge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sourceTreeId: sourceId, targetTreeId: targetId }),
+      });
+      if (!res.ok) throw new Error("Merge failed");
+      toast.success("Trees merged. Redirecting to target tree...");
+      router.push(`/narrative-trees/${targetId}`);
+    } catch {
+      toast.error("Failed to merge trees");
     }
   }
 
@@ -469,8 +522,104 @@ export default function NarrativeTreeDetailPage() {
         </Card>
       </div>
 
+      {/* View Mode Toggle + Hypothesis Dialog */}
+      <div className="flex items-center gap-3 mb-6">
+        <div className="flex bg-zinc-900 rounded-lg border border-zinc-800 p-0.5">
+          <button
+            onClick={() => setViewMode("list")}
+            className={`px-4 py-2 text-xs font-bold rounded-md transition-all ${
+              viewMode === "list"
+                ? "bg-white/10 text-white"
+                : "text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            List View
+          </button>
+          <button
+            onClick={() => setViewMode("graph")}
+            className={`px-4 py-2 text-xs font-bold rounded-md transition-all ${
+              viewMode === "graph"
+                ? "bg-white/10 text-white"
+                : "text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            Graph View
+          </button>
+        </div>
+      </div>
+
+      {/* Hypothesis Dialog */}
+      {showHypothesisDialog && (
+        <Card className="rounded-2xl border-amber-500/20 mb-6 animate-fade-in">
+          <CardContent className="p-5">
+            <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider mb-3">
+              Add What-If Scenario
+            </h3>
+            <p className="text-xs text-zinc-500 mb-3">
+              What scenario do you want the AI to plan for? This will create a hypothesis node and trigger the Strategist.
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={hypothesisInput}
+                onChange={(e) => setHypothesisInput(e.target.value)}
+                placeholder="e.g., What if oil prices reach $120/barrel?"
+                className="flex-1 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                onKeyDown={(e) => { if (e.key === "Enter") addHypothesis(); }}
+              />
+              <Button
+                onClick={addHypothesis}
+                disabled={addingHypothesis || !hypothesisInput.trim()}
+                className="gap-2 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-bold"
+                size="sm"
+              >
+                {addingHypothesis && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                Add
+              </Button>
+              <Button
+                onClick={() => setShowHypothesisDialog(false)}
+                variant="outline"
+                size="sm"
+                className="border-zinc-700 text-zinc-400"
+              >
+                Cancel
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Graph View */}
+      {viewMode === "graph" && (
+        <div className="mb-6 animate-fade-in">
+          <TreeVisualizer
+            tree={{
+              id: tree.id,
+              rootTrend: tree.rootTrend,
+              status: tree.status,
+              nodes: tree.nodes.map((n) => ({
+                id: n.id,
+                signalTitle: n.signalTitle,
+                signalScore: n.signalScore,
+                nodeType: n.nodeType ?? "SIGNAL",
+                identifiedAt: n.identifiedAt,
+              })),
+              dossier: tree.dossier ? { id: tree.dossier.id } : null,
+              contentPieces: tree.contentPieces.map((p) => ({
+                id: p.id,
+                platform: p.platform,
+                status: p.status,
+              })),
+            }}
+            allTrees={allTrees}
+            onMerge={handleMerge}
+            onAddHypothesis={() => setShowHypothesisDialog(true)}
+          />
+        </div>
+      )}
+
       {/* ── Split View: Signals (Left) | Outputs (Right) ──────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className={`grid grid-cols-1 lg:grid-cols-2 gap-6 ${viewMode === "graph" ? "hidden" : ""}`}>
         {/* LEFT COLUMN — The Signals */}
         <div>
           <h2 className="text-xs font-black text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2">

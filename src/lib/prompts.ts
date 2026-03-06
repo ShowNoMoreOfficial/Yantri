@@ -681,7 +681,13 @@ OUTPUT FORMAT (respond in JSON only):
   return { systemPrompt, userMessage: "Generate the complete LinkedIn post and posting plan now." };
 }
 
-export function buildContentGenerationPrompt(
+/**
+ * Build a content generation prompt. Supports dynamic DB templates:
+ * - If `promptTemplateId` is provided, fetches that specific template.
+ * - If not, queries for the active template for the platform.
+ * - Falls back to hardcoded prompts if no DB template is found.
+ */
+export async function buildContentGenerationPrompt(
   platform: string,
   narrativeAngle: string,
   format: string,
@@ -690,8 +696,9 @@ export function buildContentGenerationPrompt(
   voiceRules: string,
   language: string,
   researchResults: string,
-  trendHeadline: string
-): { systemPrompt: string; userMessage: string } {
+  trendHeadline: string,
+  promptTemplateId?: string
+): Promise<{ systemPrompt: string; userMessage: string }> {
   const ctx = sharedContext({
     narrativeAngle,
     trendHeadline,
@@ -703,6 +710,50 @@ export function buildContentGenerationPrompt(
     format,
   });
 
+  // Try to load a dynamic prompt from the DB
+  if (promptTemplateId || true) {
+    try {
+      const { prisma } = await import("@/lib/prisma");
+      const normalized = normalizePlatform(platform);
+
+      const template = promptTemplateId
+        ? await prisma.promptTemplate.findUnique({ where: { id: promptTemplateId } })
+        : await prisma.promptTemplate.findFirst({
+            where: { platform: normalized, isActive: true },
+          });
+
+      if (template) {
+        // Replace placeholders in the userFormat template
+        const userMessage = template.userFormat
+          .replace(/\{\{narrativeAngle\}\}/g, narrativeAngle)
+          .replace(/\{\{trendHeadline\}\}/g, trendHeadline)
+          .replace(/\{\{brandName\}\}/g, brandName)
+          .replace(/\{\{brandTone\}\}/g, brandTone)
+          .replace(/\{\{voiceRules\}\}/g, voiceRules)
+          .replace(/\{\{language\}\}/g, language)
+          .replace(/\{\{researchResults\}\}/g, researchResults)
+          .replace(/\{\{format\}\}/g, format)
+          .replace(/\{\{platform\}\}/g, platform);
+
+        const systemPrompt = template.systemPrompt
+          .replace(/\{\{narrativeAngle\}\}/g, narrativeAngle)
+          .replace(/\{\{trendHeadline\}\}/g, trendHeadline)
+          .replace(/\{\{brandName\}\}/g, brandName)
+          .replace(/\{\{brandTone\}\}/g, brandTone)
+          .replace(/\{\{voiceRules\}\}/g, voiceRules)
+          .replace(/\{\{language\}\}/g, language)
+          .replace(/\{\{researchResults\}\}/g, researchResults)
+          .replace(/\{\{format\}\}/g, format)
+          .replace(/\{\{platform\}\}/g, platform);
+
+        return { systemPrompt, userMessage };
+      }
+    } catch {
+      // DB not available or query failed — fall through to hardcoded prompts
+    }
+  }
+
+  // Fallback to hardcoded platform-specific prompts
   const normalized = normalizePlatform(platform);
 
   switch (normalized) {

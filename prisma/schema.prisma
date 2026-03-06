@@ -71,6 +71,7 @@ model NarrativeNode {
   id           String        @id @default(cuid())
   treeId       String
   tree         NarrativeTree @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  nodeType     NodeType      @default(SIGNAL)
   signalData   Json          // Raw Khabri payload
   signalTitle  String        // Quick-access headline
   signalScore  Int           @default(0)
@@ -79,12 +80,18 @@ model NarrativeNode {
   @@index([treeId])
 }
 
+enum NodeType {
+  SIGNAL
+  HYPOTHESIS
+}
+
 model FactDossier {
   id             String        @id @default(cuid())
   treeId         String        @unique
   tree           NarrativeTree @relation(fields: [treeId], references: [id], onDelete: Cascade)
   structuredData Json          // { facts, stats, quotes, timeline }
   sources        String[]      // Array of source URLs
+  visualAssets   String[]      // URLs to scraped images/charts in blob storage
   rawResearch    String?       @db.Text // Full research text before synthesis
   lastUpdated    DateTime      @updatedAt
   createdAt      DateTime      @default(now())
@@ -134,6 +141,21 @@ enum ContentStatus {
   RELAYED
   PUBLISHED
   KILLED
+}
+
+// ─── Prompt Templates (Dynamic Prompt Library) ──────────────────────────────
+
+model PromptTemplate {
+  id           String   @id @default(cuid())
+  platform     String   // "twitter", "linkedin", "youtube", "meta", "blog"
+  name         String   // e.g., "Standard X Thread", "Contrarian Growth Post"
+  systemPrompt String   @db.Text
+  userFormat   String   @db.Text // Template for how context is structured
+  isActive     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([platform, isActive])
 }
 
 // ─── Legacy Models (kept for migration compatibility) ───────────────────────

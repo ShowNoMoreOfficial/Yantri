@@ -260,6 +260,7 @@ export async function POST(request: NextRequest) {
         treeId,
         structuredData: structuredJson,
         sources: allSources,
+        visualAssets: [],
         rawResearch,
       },
       update: {

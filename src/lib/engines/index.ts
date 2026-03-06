@@ -107,7 +107,7 @@ export async function runContentEngine(
     throw new Error("ContentEngine: brandName is required");
   }
 
-  const { systemPrompt, userMessage } = buildContentGenerationPrompt(
+  const { systemPrompt, userMessage } = await buildContentGenerationPrompt(
     platform,
     narrativeAngle,
     format,

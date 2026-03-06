@@ -82,20 +82,40 @@ export async function callGemini(
 }
 
 /**
- * Call Gemini 2.5 Flash with Google Search grounding for web-sourced research.
+ * Inline image data for multi-modal research calls.
+ */
+export interface InlineImageData {
+  mimeType: string; // e.g., "image/png", "image/jpeg"
+  base64: string;   // base64-encoded image data
+}
+
+/**
+ * Call Gemini with Google Search grounding for web-sourced research.
  * Returns plain text (not JSON) with inline citations from live web results.
+ * Optionally accepts inline images/charts for multi-modal context.
  */
 export async function callGeminiResearch(
   systemPrompt: string,
-  userMessage: string
+  userMessage: string,
+  inlineImages?: InlineImageData[]
 ): Promise<string> {
   let lastError: Error | null = null;
+
+  // Build multipart content if images are provided
+  const contents: unknown = inlineImages && inlineImages.length > 0
+    ? [
+        { text: userMessage },
+        ...inlineImages.map((img) => ({
+          inlineData: { mimeType: img.mimeType, data: img.base64 },
+        })),
+      ]
+    : userMessage;
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       const result = await genAI.models.generateContent({
         model: "gemini-3.1-pro-preview",
-        contents: userMessage,
+        contents: contents as string,
         config: {
           systemInstruction: systemPrompt,
           temperature: 0.3,
