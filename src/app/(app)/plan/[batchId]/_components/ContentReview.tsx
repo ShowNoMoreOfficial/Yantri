@@ -78,9 +78,9 @@ export default function ContentReview({ deliverable, onUpdate }: ContentReviewPr
       {platform === "twitter" && <TwitterPreview data={data} />}
       {platform === "youtube" && <YouTubePreview data={data} />}
       {platform === "blog" && <BlogPreview data={data} />}
-      {platform === "meta" && <MetaPreview data={data} />}
+      {(platform === "meta" || platform.startsWith("meta_")) && <MetaPreview data={data} />}
       {platform === "linkedin" && <LinkedInPreview data={data} />}
-      {!["twitter", "youtube", "blog", "meta", "linkedin"].includes(platform) && (
+      {!["twitter", "youtube", "blog", "meta", "meta_reel", "meta_carousel", "meta_post", "linkedin"].includes(platform) && (
         <div className="space-y-4">
           <div className="text-sm text-muted-foreground">
             Platform &quot;{data.platform}&quot; — showing raw deliverable

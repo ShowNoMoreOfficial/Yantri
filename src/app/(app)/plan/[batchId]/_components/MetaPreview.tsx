@@ -21,10 +21,17 @@ interface MetaDeliverable {
     time_reasoning: string;
     story_tease?: string;
   };
+  voiceover?: {
+    voiceId?: string;
+    modelId?: string;
+    duration?: string;
+    audioSizeBytes?: number;
+    purpose?: string;
+  } | null;
 }
 
 export default function MetaPreview({ data }: { data: MetaDeliverable }) {
-  const { content, postingPlan } = data;
+  const { content, postingPlan, voiceover } = data;
   const isReel = content.type === "reel";
 
   return (
@@ -85,6 +92,55 @@ export default function MetaPreview({ data }: { data: MetaDeliverable }) {
               Music mood: <span className="text-zinc-400 font-medium">{content.music_mood}</span>
             </div>
           )}
+
+          {/* Voiceover */}
+          <Card className="rounded-xl border-border p-5 bg-emerald-950/20 border-emerald-500/20">
+            <div className="flex items-center gap-2 mb-3">
+              <svg className="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                <line x1="12" y1="19" x2="12" y2="23" />
+                <line x1="8" y1="23" x2="16" y2="23" />
+              </svg>
+              <h4 className="text-xs font-black text-emerald-400 uppercase tracking-widest">AI Voiceover</h4>
+              <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[9px] font-black ml-auto">
+                ElevenLabs
+              </Badge>
+            </div>
+            {voiceover ? (
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                {voiceover.duration && (
+                  <div>
+                    <span className="text-zinc-500">Duration:</span>{" "}
+                    <span className="text-zinc-300 font-medium">{voiceover.duration}</span>
+                  </div>
+                )}
+                {voiceover.voiceId && (
+                  <div>
+                    <span className="text-zinc-500">Voice:</span>{" "}
+                    <span className="text-zinc-300 font-medium font-mono">{voiceover.voiceId.slice(0, 12)}...</span>
+                  </div>
+                )}
+                {voiceover.modelId && (
+                  <div>
+                    <span className="text-zinc-500">Model:</span>{" "}
+                    <span className="text-zinc-300 font-medium">{voiceover.modelId}</span>
+                  </div>
+                )}
+                {voiceover.audioSizeBytes && (
+                  <div>
+                    <span className="text-zinc-500">Size:</span>{" "}
+                    <span className="text-zinc-300 font-medium">{(voiceover.audioSizeBytes / 1024).toFixed(0)} KB</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-xs text-emerald-400/70">
+                <div className="w-2 h-2 rounded-full bg-emerald-400/50 animate-pulse" />
+                <span>Voiceover will be generated when deliverable enters pipeline</span>
+              </div>
+            )}
+          </Card>
         </div>
       )}
 

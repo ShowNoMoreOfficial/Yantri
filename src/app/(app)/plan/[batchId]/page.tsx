@@ -52,20 +52,26 @@ interface Batch {
 // Platform display helpers
 function getPlatformLabel(platform: string): string {
   const p = platform.toLowerCase();
-  if (p.includes("twitter")) return "Twitter Thread";
+  if (p.includes("twitter") || p === "x_thread") return "Twitter Thread";
+  if (p === "x_single") return "Twitter Post";
   if (p.includes("youtube")) return "YouTube Longform";
   if (p.includes("blog")) return "Blog Article";
-  if (p.includes("meta") || p.includes("reel") || p.includes("carousel")) return "Meta Content";
+  if (p === "meta_reel") return "Meta Reel";
+  if (p === "meta_carousel") return "Meta Carousel";
+  if (p === "meta_post") return "Meta Post";
   if (p.includes("linkedin")) return "LinkedIn Post";
   return platform.replace(/_/g, " ");
 }
 
 function getAgentName(platform: string): string {
   const p = platform.toLowerCase();
-  if (p.includes("twitter")) return "Twitter Agent";
+  if (p.includes("twitter") || p.includes("x_")) return "Twitter Agent";
   if (p.includes("youtube")) return "YouTube Agent";
   if (p.includes("blog")) return "Blog Agent";
-  if (p.includes("meta") || p.includes("reel") || p.includes("carousel")) return "Meta Agent";
+  if (p === "meta_reel") return "Meta Reel Agent";
+  if (p === "meta_carousel") return "Meta Carousel Agent";
+  if (p === "meta_post") return "Meta Post Agent";
+  if (p.includes("meta")) return "Meta Agent";
   if (p.includes("linkedin")) return "LinkedIn Agent";
   return "Content Agent";
 }
@@ -78,8 +84,14 @@ function getDeliverableDescription(platform: string): string[] {
     return ["Full video script with production cues", "Three title options with thumbnail brief", "SEO description, tags, and posting time"];
   if (p.includes("blog"))
     return ["Complete article with headings and SEO", "Meta description and keyphrases", "Publishing schedule"];
+  if (p === "meta_reel")
+    return ["Reel script with text overlays and timing", "AI voiceover narration", "Cover thumbnail, caption, and posting time"];
+  if (p === "meta_carousel")
+    return ["8-12 slide carousel with visual prompts", "Cover thumbnail for high CTR", "SEO caption, hashtags, and posting time"];
+  if (p === "meta_post")
+    return ["Single image post with visual prompt", "Caption and hashtag strategy", "Posting time and engagement plan"];
   if (p.includes("meta"))
-    return ["Reel script with text overlays or carousel slides", "Caption and hashtag strategy", "Story tease and posting time"];
+    return ["Platform-specific Meta content", "Caption and hashtag strategy", "Story tease and posting time"];
   if (p.includes("linkedin"))
     return ["Complete professional post", "Hashtag strategy and posting time", "Engagement playbook"];
   return ["Platform-specific content", "Posting plan"];
