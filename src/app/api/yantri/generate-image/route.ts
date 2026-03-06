@@ -37,11 +37,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const { mimeType, data } = imagePart.inlineData;
+    const { data } = imagePart.inlineData;
 
     return NextResponse.json({
       success: true,
-      image: `data:${mimeType};base64,${data}`,
+      image: data,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

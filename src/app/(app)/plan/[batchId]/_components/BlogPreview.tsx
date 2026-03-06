@@ -71,7 +71,7 @@ export default function BlogPreview({ data }: { data: BlogDeliverable }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to generate image");
-      setFeaturedImage(data.image);
+      setFeaturedImage(`data:image/png;base64,${data.image}`);
     } catch (err) {
       console.error("Image generation failed:", err);
       alert(err instanceof Error ? err.message : "Image generation failed");
