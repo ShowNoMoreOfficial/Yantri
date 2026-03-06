@@ -137,9 +137,12 @@ function inferPipelineType(platform: string): string {
     case "X_SINGLE":
     case "X_THREAD":
     case "LINKEDIN":
+    case "META_POST":
       return "viral_micro";
     case "META_CAROUSEL":
       return "carousel";
+    case "META_REEL":
+      return "reel";
     case "YOUTUBE":
       return "cinematic";
     default:
@@ -155,6 +158,8 @@ function getEventNameForPipeline(pipelineType: string): string {
       return "yantri/deliverable.carousel";
     case "cinematic":
       return "yantri/deliverable.cinematic";
+    case "reel":
+      return "yantri/deliverable.reel";
     default:
       return "yantri/deliverable.viral-micro";
   }

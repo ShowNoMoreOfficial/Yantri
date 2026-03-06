@@ -11,6 +11,7 @@ import {
   viralMicroPipeline,
   carouselPipeline,
   cinematicPipeline,
+  reelPipeline,
 } from "@/lib/inngest/deliverablePipelines";
 
 export const { GET, POST, PUT } = serve({
@@ -25,5 +26,6 @@ export const { GET, POST, PUT } = serve({
     viralMicroPipeline,
     carouselPipeline,
     cinematicPipeline,
+    reelPipeline,
   ],
 });

@@ -65,7 +65,22 @@ export async function runStrategist(
       brandName: { in: brandNames },
     },
     orderBy: { recordedAt: "desc" },
-    take: 50, // Last 50 performance records across all brands
+    take: 200, // Last 200 performance records for statistical significance
+  });
+
+  // 2b. Fetch recent deliverables to detect platform over-indexing
+  const recentDeliverables = await prisma.deliverable.findMany({
+    where: {
+      brandId: { in: brands.map((b) => b.id) },
+      createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+    },
+    select: {
+      brandId: true,
+      platform: true,
+      treeId: true,
+      createdAt: true,
+    },
+    orderBy: { createdAt: "desc" },
   });
 
   // 3. Build brand profiles for the prompt
@@ -101,6 +116,13 @@ export async function runStrategist(
       }
     }
 
+    // Count recent deliverables by platform for this brand
+    const brandDeliverables = recentDeliverables.filter((d) => d.brandId === brand.id);
+    const deliverablesByPlatform: Record<string, number> = {};
+    for (const d of brandDeliverables) {
+      deliverablesByPlatform[d.platform] = (deliverablesByPlatform[d.platform] ?? 0) + 1;
+    }
+
     return {
       id: brand.id,
       name: brand.name,
@@ -113,6 +135,7 @@ export async function runStrategist(
       voiceRules,
       priorities,
       performanceByPlatform: perfByPlatform,
+      deliverablesByPlatform,
     };
   });
 
@@ -152,7 +175,11 @@ ${Object.entries(bp.performanceByPlatform)
               ([platform, stats]) =>
                 `    ${platform}: ${stats.count} pieces, avg engagement ${stats.avgEngagement.toFixed(2)}%, avg impressions ${Math.round(stats.avgImpressions)}`
             )
-            .join("\n") || "    No performance data available."}`
+            .join("\n") || "    No performance data available."}
+  Recent deliverables (last 7 days):
+${Object.entries(bp.deliverablesByPlatform)
+            .map(([platform, count]) => `    ${platform}: ${count} pieces`)
+            .join("\n") || "    None."}`
       )
       .join("\n---")}
   
@@ -163,6 +190,9 @@ DECISION RULES:
 4. Each decision should have a unique, specific angle tailored to the brand's voice and audience.
 5. Prioritize quality over quantity — only create decisions where there is a genuine editorial fit.
 6. Assign a priority number (1 = highest) based on urgency and fit strength.
+7. PLATFORM DIVERSITY: If a brand already has 2+ deliverables on the same platform in the last 7 days (shown in "Recent deliverables"), STRONGLY prefer a different platform — unless performance data clearly shows that platform dramatically outperforms alternatives.
+8. PERFORMANCE-WEIGHTED ROUTING: When choosing between platforms, prefer platforms where the brand has HIGHER average engagement rate AND impressions. A platform with 2x the engagement rate should be preferred unless brand fit is poor.
+9. MULTI-DELIVERABLE: If a narrative has both long-form depth AND visual/short-form potential, you MAY create TWO decisions for the same brand — one for the primary format and one for a secondary format on a different platform. Maximum 2 decisions per brand per narrative. Each must have a distinct angle.
 
 DEEP RESEARCH PROMPT RULES:
 For each decision, generate a \`deep_research_prompt\` — a fully-formed system prompt that will be sent to a research model to produce the sourced dossier needed to execute this specific angle.
@@ -193,13 +223,21 @@ PLATFORM VALUES MUST BE ONE OF: YOUTUBE, X_THREAD, X_SINGLE, BLOG, LINKEDIN, MET
 If no brand is a good fit for this narrative, return: { "decisions": [] }
 Before responding, verify your output is valid JSON. Field names are case-sensitive. Do not add, rename, or omit any field.`;
 
+  // Gather existing deliverables for this tree to prevent duplication
+  const treeDeliverables = recentDeliverables.filter((d) => d.treeId === treeId);
+
   const userMessage = `Based on this FactDossier, decide which brands should create content and how:
 
 FACT DOSSIER:
 ${dossierSummary}
 
 Available brand IDs for reference:
-${brandProfiles.map((bp) => `${bp.name}: ${bp.id}`).join("\n")}`;
+${brandProfiles.map((bp) => `${bp.name}: ${bp.id}`).join("\n")}
+
+EXISTING DELIVERABLES FOR THIS NARRATIVE TREE:
+${treeDeliverables.length > 0
+    ? treeDeliverables.map((d) => `- ${d.platform} (${d.createdAt.toISOString().split("T")[0]})`).join("\n")
+    : "None — this is a fresh narrative."}`;
 
   // 6. Call the strategy model
   const result = await routeToModel("strategy", systemPrompt, userMessage, {

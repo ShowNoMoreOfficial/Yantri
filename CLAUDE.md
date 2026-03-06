@@ -92,6 +92,7 @@ Required in `.env`:
 - `ANTHROPIC_API_KEY` — Anthropic Claude API key
 - `NEXTAUTH_SECRET` — NextAuth session secret
 - `NEXTAUTH_URL` — App URL (e.g., `http://localhost:3000`)
+- `ELEVENLABS_API_KEY` — ElevenLabs TTS API key (for voiceover generation)
 - `INNGEST_EVENT_KEY` — Inngest event key (optional for dev)
 
 ## Database

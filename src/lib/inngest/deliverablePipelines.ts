@@ -193,6 +193,8 @@ export const viralMicroPipeline = inngest.createFunction(
       const platformTarget =
         deliverable.platform === "LINKEDIN"
           ? "linkedin"
+          : deliverable.platform === "META_POST"
+          ? "x"
           : deliverable.platform === "X_SINGLE" || deliverable.platform === "X_THREAD"
           ? "x"
           : ("both" as const);
@@ -368,7 +370,34 @@ export const carouselPipeline = inngest.createFunction(
       }
     });
 
-    // Step 6: Save carousel data and mark for review
+    // Step 6: Generate cover thumbnail for Meta CTR
+    await step.run("generate-carousel-thumbnail", async () => {
+      const visualResult = await generateVisualPrompts({
+        narrativeAngle: deliverable.copyMarkdown?.slice(0, 500) ?? "",
+        platform: "meta",
+        brandName: deliverable.brand.name,
+        emotion: "curiosity",
+        colorMood: "bold, scroll-stopping, high contrast",
+        generatedContent: carouselResult.caption,
+        researchData: research,
+      });
+
+      await prisma.asset.create({
+        data: {
+          deliverableId,
+          type: "THUMBNAIL",
+          url: "",
+          promptUsed: visualResult.thumbnailPrompt,
+          metadata: {
+            socialCardPrompt: visualResult.socialCardPrompt,
+            nanoBananaAngles: JSON.parse(JSON.stringify(visualResult.nanoBananaAngles)),
+            purpose: "carousel_cover_image",
+          },
+        },
+      });
+    });
+
+    // Step 7: Save carousel data and mark for review
     await step.run("save-and-finalize", async () => {
       await prisma.deliverable.update({
         where: { id: deliverableId },
@@ -614,5 +643,191 @@ export const cinematicPipeline = inngest.createFunction(
       storyboardFrames: cinematicResult.storyboard.length,
       brollAssets: cinematicResult.brollAssets.length,
     };
+  }
+);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 4. META REEL PIPELINE (Instagram/Meta Reels)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const reelPipeline = inngest.createFunction(
+  {
+    id: "reel-pipeline",
+    retries: 2,
+    concurrency: { limit: 3 },
+  },
+  { event: "yantri/deliverable.reel" },
+  async ({ event, step }) => {
+    const { deliverableId } = event.data as DeliverableEvent["data"];
+
+    // Step 1: Fetch deliverable
+    const deliverable = await step.run("fetch-deliverable", async () => {
+      return await prisma.deliverable.findUniqueOrThrow({
+        where: { id: deliverableId },
+        include: { brand: true },
+      });
+    });
+
+    // Step 2: Auto-cluster into NarrativeTree
+    const treeId = await step.run("auto-cluster", async () => {
+      if (deliverable.treeId) return deliverable.treeId;
+      return await autoCluster(
+        deliverableId,
+        deliverable.copyMarkdown?.slice(0, 1000) ?? "",
+        deliverable.platform,
+        deliverable.brandId
+      );
+    });
+
+    // Step 3: Research
+    await step.run("set-researching", async () => {
+      await prisma.deliverable.update({
+        where: { id: deliverableId },
+        data: { status: "RESEARCHING" },
+      });
+    });
+
+    const research = await step.run("research", async () => {
+      return await resolveResearch(
+        deliverableId,
+        treeId,
+        deliverable.copyMarkdown ?? "",
+        deliverable.brand.name,
+        deliverable.platform,
+        deliverable.researchPrompt
+      );
+    });
+
+    // Step 4: Generate reel content via buildContentGenerationPrompt → buildMetaPrompt
+    await step.run("set-scripting", async () => {
+      await prisma.deliverable.update({
+        where: { id: deliverableId },
+        data: { status: "SCRIPTING" },
+      });
+    });
+
+    const reelResult = await step.run("generate-reel-content", async () => {
+      const voiceRules = Array.isArray(deliverable.brand.voiceRules)
+        ? (deliverable.brand.voiceRules as string[]).join("; ")
+        : JSON.stringify(deliverable.brand.voiceRules);
+
+      const { buildContentGenerationPrompt } = await import("@/lib/prompts");
+      const { systemPrompt, userMessage } = await buildContentGenerationPrompt(
+        "META_REEL",
+        deliverable.copyMarkdown?.slice(0, 500) ?? "",
+        "reel",
+        deliverable.brand.name,
+        deliverable.brand.tone,
+        voiceRules,
+        deliverable.brand.language,
+        research,
+        deliverable.copyMarkdown?.slice(0, 150) ?? ""
+      );
+
+      const result = await routeToModel("drafting", systemPrompt, userMessage, {
+        temperature: 0.5,
+      });
+
+      if (!result.parsed) {
+        throw new Error(
+          `ReelPipeline: model returned unparseable response. Raw: ${result.raw.slice(0, 300)}`
+        );
+      }
+
+      return result.parsed as Record<string, unknown>;
+    });
+
+    // Step 5: Generate voiceover from reel script
+    await step.run("set-generating-assets", async () => {
+      await prisma.deliverable.update({
+        where: { id: deliverableId },
+        data: { status: "GENERATING_ASSETS" },
+      });
+    });
+
+    await step.run("generate-reel-voiceover", async () => {
+      const content = reelResult.content as Record<string, unknown> | undefined;
+      const scriptText = (content?.script as string) ?? "";
+
+      if (!scriptText.trim()) return;
+
+      // Strip timing/direction cues for clean narration
+      const cleanScript = scriptText
+        .replace(/\[(?:TEXT OVERLAY|MUSIC|SFX|CUT|TRANSITION)[^\]]*\]/gi, "")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+
+      if (!cleanScript) return;
+
+      const result = await generateVoiceover(cleanScript, {
+        stability: 0.6,
+        similarityBoost: 0.8,
+      });
+
+      await prisma.asset.create({
+        data: {
+          deliverableId,
+          type: "AUDIO",
+          url: "",
+          metadata: {
+            voiceId: result.voiceId,
+            modelId: result.modelId,
+            purpose: "reel_voiceover",
+            duration: (content?.duration as string) ?? "30-60 seconds",
+            audioSizeBytes: result.audio.length,
+          },
+        },
+      });
+    });
+
+    // Step 6: Generate cover thumbnail for Meta CTR
+    await step.run("generate-reel-thumbnail", async () => {
+      const visualResult = await generateVisualPrompts({
+        narrativeAngle: deliverable.copyMarkdown?.slice(0, 500) ?? "",
+        platform: "meta",
+        brandName: deliverable.brand.name,
+        emotion: "curiosity",
+        colorMood: "bold, scroll-stopping, high contrast",
+        generatedContent: JSON.stringify(reelResult.content ?? {}),
+        researchData: research,
+      });
+
+      await prisma.asset.create({
+        data: {
+          deliverableId,
+          type: "THUMBNAIL",
+          url: "",
+          promptUsed: visualResult.thumbnailPrompt,
+          metadata: {
+            socialCardPrompt: visualResult.socialCardPrompt,
+            nanoBananaAngles: JSON.parse(JSON.stringify(visualResult.nanoBananaAngles)),
+            purpose: "reel_cover_image",
+          },
+        },
+      });
+    });
+
+    // Step 7: Save and mark for review
+    await step.run("save-and-finalize", async () => {
+      const content = reelResult.content as Record<string, unknown> | undefined;
+      const postingPlan = reelResult.postingPlan as object | undefined;
+
+      await prisma.deliverable.update({
+        where: { id: deliverableId },
+        data: {
+          copyMarkdown: (content?.script as string) ?? JSON.stringify(content),
+          scriptData: {
+            textOverlays: content?.text_overlays ?? [],
+            duration: content?.duration ?? null,
+            musicMood: content?.music_mood ?? null,
+            type: "reel",
+          },
+          postingPlan: postingPlan ?? {},
+          status: "REVIEW",
+        },
+      });
+    });
+
+    return { deliverableId, status: "reel-complete" };
   }
 );
