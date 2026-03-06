@@ -529,34 +529,46 @@ OUTPUT FORMAT (respond in JSON only):
 }
 
 function buildBlogPrompt(ctx: string): { systemPrompt: string; userMessage: string } {
-  const systemPrompt = `You are the Blog Engine — a long-form editorial writer for a data-driven news brand. You produce complete, publish-ready articles. Not outlines — THE FULL ARTICLE with SEO optimization, complete metadata, and a featured image prompt.
+  const systemPrompt = `You are the Blog Engine — a long-form editorial writer for a data-driven news brand. You produce complete, publish-ready articles in HTML format that can be directly copy-pasted into any CMS. Not outlines — THE FULL ARTICLE with SEO optimization, inline image placement, and complete metadata.
 
 ${ctx}
 
 INSTRUCTIONS:
-1. Write a complete article (1200-2500 words) with proper heading hierarchy using markdown heading tags (## for H2, ### for H3 — the title itself is H1).
+1. Write a complete article (1200-2500 words) in clean HTML with proper heading tags.
 2. Format: Choose the best format for this narrative — Explainer, Timeline, Data Analysis, or Policy Breakdown.
 3. Lead with the most compelling finding from the research. Don't bury the lede.
 4. Every claim must be backed by data from the research dossier with source attribution.
-5. Use subheadings (## and ###) every 200-300 words for scannability.
+5. Use subheadings every 200-300 words for scannability.
 6. Include a strong conclusion with forward-looking implications.
 7. Write in the brand's voice and language.
-8. The article text MUST be in proper markdown format with:
-   - **Bold** for emphasis, *italic* for terms
-   - ## H2 and ### H3 subheadings (NOT H1 — the title is separate)
-   - Bullet points and numbered lists where appropriate
-   - > Blockquotes for key stats or expert quotes
-   - Horizontal rules (---) between major sections if needed
-9. Generate a detailed image prompt for a featured image (1280x720). The image should be editorial, photojournalistic or infographic-style — NO text in the image. Describe composition, mood, color palette, and subject matter that captures the article's core theme.
+8. The article MUST be in clean HTML format (NOT markdown). Use these tags:
+   - <h2> and <h3> for subheadings (the title is separate, do NOT include <h1>)
+   - <p> for paragraphs
+   - <strong> for bold emphasis, <em> for italics
+   - <ul>/<ol> with <li> for lists
+   - <blockquote> for key stats or expert quotes
+   - <hr> between major sections if needed
+   - DO NOT include any <html>, <head>, <body>, or <style> wrapper tags — just the article body content
+9. Generate a detailed image prompt for a featured image (1280x720). Editorial, photojournalistic or infographic-style — NO text in the image.
+10. Generate 2-4 inline image prompts placed at natural section breaks within the article. These will be used to generate images that go BETWEEN sections of the blog. Each inline image should:
+    - Be contextually relevant to the surrounding section
+    - Be editorial/photojournalistic style, NO text in the image
+    - Have a unique visual angle (don't repeat the featured image concept)
+    - Mark their placement in the article HTML with: <!-- INLINE_IMAGE_0 --> (using index 0, 1, 2, etc.)
 
 OUTPUT FORMAT (respond in JSON only):
 {
   "platform": "blog",
   "content": {
-    "article": "## First Section Heading\\n\\nFull markdown article text...",
+    "article": "<h2>First Section</h2>\\n<p>Article text...</p>\\n<!-- INLINE_IMAGE_0 -->\\n<h2>Second Section</h2>\\n<p>More text...</p>",
     "word_count": 1800,
     "format_type": "explainer|timeline|data_analysis|policy_breakdown",
-    "featured_image_prompt": "A detailed prompt describing the featured image for this article — editorial style, 1280x720, no text overlay"
+    "featured_image_prompt": "Detailed prompt for the hero/featured image — editorial style, 1280x720, no text",
+    "inline_image_prompts": [
+      {"index": 0, "prompt": "Detailed prompt for first inline image — contextual to section above", "alt": "Alt text describing the image"},
+      {"index": 1, "prompt": "Detailed prompt for second inline image", "alt": "Alt text"},
+      {"index": 2, "prompt": "Detailed prompt for third inline image", "alt": "Alt text"}
+    ]
   },
   "postingPlan": {
     "title": "The main article title as it appears on the blog",

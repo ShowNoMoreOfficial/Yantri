@@ -1,12 +1,16 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { useState, useCallback, useMemo } from "react";
 import CopyButton from "@/components/CopyButton";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+interface InlineImagePrompt {
+  index: number;
+  prompt: string;
+  alt: string;
+}
 
 interface BlogDeliverable {
   platform: string;
@@ -15,6 +19,7 @@ interface BlogDeliverable {
     word_count: number;
     format_type?: string;
     featured_image_prompt?: string;
+    inline_image_prompts?: InlineImagePrompt[];
   };
   postingPlan: {
     title?: string;
@@ -55,30 +60,163 @@ function SeoField({ label, value, maxChars }: { label: string; value: string; ma
   );
 }
 
+const SpinnerIcon = () => (
+  <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24">
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+  </svg>
+);
+
+const ImageIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+  </svg>
+);
+
+async function generateImage(prompt: string): Promise<string> {
+  const res = await fetch("/api/yantri/generate-image", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to generate image");
+  return `data:image/png;base64,${data.image}`;
+}
+
+function InlineImageCard({
+  imagePrompt,
+  generatedImage,
+  loading,
+  onGenerate,
+}: {
+  imagePrompt: InlineImagePrompt;
+  generatedImage: string | null;
+  loading: boolean;
+  onGenerate: () => void;
+}) {
+  return (
+    <Card className="rounded-xl border-border border-dashed p-4 my-4">
+      {generatedImage ? (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-zinc-600 uppercase">Inline Image {imagePrompt.index + 1}</span>
+            <div className="flex gap-2">
+              <a
+                href={generatedImage}
+                download={`inline-image-${imagePrompt.index + 1}.png`}
+                className="text-xs bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded-md hover:bg-emerald-500/20 transition-colors"
+              >
+                Download
+              </a>
+              <button
+                onClick={onGenerate}
+                disabled={loading}
+                className="text-xs bg-zinc-800 text-zinc-400 px-2 py-1 rounded-md hover:bg-zinc-700 transition-colors"
+              >
+                Regenerate
+              </button>
+            </div>
+          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={generatedImage}
+            alt={imagePrompt.alt}
+            className="w-full rounded-lg aspect-video object-cover"
+          />
+          <p className="text-[10px] text-zinc-600 italic">{imagePrompt.alt}</p>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-zinc-800 rounded-lg flex items-center justify-center shrink-0">
+            <ImageIcon />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-zinc-500 truncate">{imagePrompt.prompt}</p>
+            <p className="text-[10px] text-zinc-600 mt-0.5">Alt: {imagePrompt.alt}</p>
+          </div>
+          <button
+            onClick={onGenerate}
+            disabled={loading}
+            className="shrink-0 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg text-xs font-medium hover:bg-emerald-500/20 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+          >
+            {loading ? <><SpinnerIcon /> Generating...</> : <>Generate</>}
+          </button>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export default function BlogPreview({ data }: { data: BlogDeliverable }) {
   const { content, postingPlan } = data;
   const [featuredImage, setFeaturedImage] = useState<string | null>(null);
-  const [imageLoading, setImageLoading] = useState(false);
+  const [featuredLoading, setFeaturedLoading] = useState(false);
+  const [inlineImages, setInlineImages] = useState<Record<number, string>>({});
+  const [inlineLoading, setInlineLoading] = useState<Record<number, boolean>>({});
 
-  const handleGenerateImage = useCallback(async () => {
+  const handleGenerateFeatured = useCallback(async () => {
     if (!content.featured_image_prompt) return;
-    setImageLoading(true);
+    setFeaturedLoading(true);
     try {
-      const res = await fetch("/api/yantri/generate-image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: content.featured_image_prompt }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to generate image");
-      setFeaturedImage(`data:image/png;base64,${data.image}`);
+      const img = await generateImage(content.featured_image_prompt);
+      setFeaturedImage(img);
     } catch (err) {
       console.error("Image generation failed:", err);
       alert(err instanceof Error ? err.message : "Image generation failed");
     } finally {
-      setImageLoading(false);
+      setFeaturedLoading(false);
     }
   }, [content.featured_image_prompt]);
+
+  const handleGenerateInline = useCallback(async (index: number, prompt: string) => {
+    setInlineLoading((prev) => ({ ...prev, [index]: true }));
+    try {
+      const img = await generateImage(prompt);
+      setInlineImages((prev) => ({ ...prev, [index]: img }));
+    } catch (err) {
+      console.error("Inline image generation failed:", err);
+      alert(err instanceof Error ? err.message : "Image generation failed");
+    } finally {
+      setInlineLoading((prev) => ({ ...prev, [index]: false }));
+    }
+  }, []);
+
+  const handleGenerateAllInline = useCallback(async () => {
+    if (!content.inline_image_prompts?.length) return;
+    for (const ip of content.inline_image_prompts) {
+      if (!inlineImages[ip.index]) {
+        await handleGenerateInline(ip.index, ip.prompt);
+      }
+    }
+  }, [content.inline_image_prompts, inlineImages, handleGenerateInline]);
+
+  // Split article HTML at <!-- INLINE_IMAGE_N --> markers to interleave image slots
+  const articleSections = useMemo(() => {
+    const sections: { html: string; imageIndex?: number }[] = [];
+    let remaining = content.article;
+    const pattern = /<!--\s*INLINE_IMAGE_(\d+)\s*-->/g;
+    let match;
+    let lastIndex = 0;
+
+    while ((match = pattern.exec(remaining)) !== null) {
+      if (match.index > lastIndex) {
+        sections.push({ html: remaining.slice(lastIndex, match.index) });
+      }
+      sections.push({ html: "", imageIndex: parseInt(match[1]) });
+      lastIndex = match.index + match[0].length;
+    }
+    if (lastIndex < remaining.length) {
+      sections.push({ html: remaining.slice(lastIndex) });
+    }
+    return sections;
+  }, [content.article]);
+
+  const inlinePromptMap = useMemo(() => {
+    const map: Record<number, InlineImagePrompt> = {};
+    content.inline_image_prompts?.forEach((ip) => { map[ip.index] = ip; });
+    return map;
+  }, [content.inline_image_prompts]);
 
   return (
     <div className="space-y-6">
@@ -101,7 +239,7 @@ export default function BlogPreview({ data }: { data: BlogDeliverable }) {
       <Tabs defaultValue="article" className="w-full">
         <TabsList className="mb-4">
           <TabsTrigger value="article">Article</TabsTrigger>
-          <TabsTrigger value="image">Featured Image</TabsTrigger>
+          <TabsTrigger value="images">Images ({1 + (content.inline_image_prompts?.length || 0)})</TabsTrigger>
           <TabsTrigger value="seo">SEO & Metadata</TabsTrigger>
           <TabsTrigger value="social">Social Meta</TabsTrigger>
         </TabsList>
@@ -111,7 +249,7 @@ export default function BlogPreview({ data }: { data: BlogDeliverable }) {
           <Card className="rounded-xl border-border p-5">
             <div className="flex items-center justify-between mb-3">
               <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-400 border-none text-xs">
-                {content.word_count} words
+                {content.word_count} words &middot; HTML
               </Badge>
               <CopyButton text={content.article} />
             </div>
@@ -119,106 +257,170 @@ export default function BlogPreview({ data }: { data: BlogDeliverable }) {
               <h1 className="text-xl font-bold text-foreground mb-4">{postingPlan.title}</h1>
             )}
             <article className="prose prose-invert prose-sm max-w-none prose-headings:text-zinc-200 prose-h2:text-lg prose-h2:mt-6 prose-h2:mb-3 prose-h3:text-base prose-h3:mt-4 prose-h3:mb-2 prose-p:text-zinc-300 prose-p:leading-relaxed prose-strong:text-zinc-200 prose-blockquote:border-emerald-500 prose-blockquote:text-zinc-400 prose-li:text-zinc-300 prose-a:text-emerald-400 max-h-[600px] overflow-auto p-4 bg-zinc-900 rounded-lg">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{content.article}</ReactMarkdown>
+              {articleSections.map((section, i) => {
+                if (section.imageIndex !== undefined) {
+                  const ip = inlinePromptMap[section.imageIndex];
+                  if (!ip) return null;
+                  return (
+                    <InlineImageCard
+                      key={`img-${section.imageIndex}`}
+                      imagePrompt={ip}
+                      generatedImage={inlineImages[section.imageIndex] || null}
+                      loading={inlineLoading[section.imageIndex] || false}
+                      onGenerate={() => handleGenerateInline(ip.index, ip.prompt)}
+                    />
+                  );
+                }
+                return (
+                  <div
+                    key={`section-${i}`}
+                    dangerouslySetInnerHTML={{ __html: section.html }}
+                  />
+                );
+              })}
             </article>
           </Card>
         </TabsContent>
 
-        {/* ── Featured Image Tab ── */}
-        <TabsContent value="image">
+        {/* ── Images Tab ── */}
+        <TabsContent value="images">
           <div className="space-y-4">
-            {/* Generated Image Display */}
-            {featuredImage ? (
-              <Card className="rounded-xl border-border p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-xs font-black text-zinc-500 uppercase tracking-widest">Featured Image (1280x720)</h4>
+            {/* Featured Image */}
+            <Card className="rounded-xl border-border p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-xs font-black text-zinc-500 uppercase tracking-widest">Featured Image (1280x720)</h4>
+                {featuredImage && (
                   <div className="flex gap-2">
                     <a
                       href={featuredImage}
-                      download="featured-image.jpg"
+                      download="featured-image.png"
                       className="text-xs bg-emerald-500/10 text-emerald-400 px-3 py-1.5 rounded-lg hover:bg-emerald-500/20 transition-colors"
                     >
                       Download
                     </a>
                     <button
-                      onClick={handleGenerateImage}
-                      disabled={imageLoading}
+                      onClick={handleGenerateFeatured}
+                      disabled={featuredLoading}
                       className="text-xs bg-zinc-800 text-zinc-400 px-3 py-1.5 rounded-lg hover:bg-zinc-700 transition-colors"
                     >
                       Regenerate
                     </button>
                   </div>
-                </div>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={featuredImage}
-                  alt={postingPlan.banner_description || "Featured image"}
-                  className="w-full rounded-lg aspect-video object-cover"
-                />
-                {postingPlan.banner_description && (
-                  <div className="mt-3 flex items-center justify-between">
-                    <p className="text-xs text-zinc-500 italic">{postingPlan.banner_description}</p>
-                    <CopyButton text={postingPlan.banner_description} />
-                  </div>
                 )}
-              </Card>
-            ) : (
-              <Card className="rounded-xl border-border p-8">
-                <div className="flex flex-col items-center justify-center text-center space-y-4">
-                  <div className="w-16 h-16 bg-zinc-800 rounded-xl flex items-center justify-center">
-                    <svg className="w-8 h-8 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              </div>
+              {featuredImage ? (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={featuredImage}
+                    alt={postingPlan.banner_description || "Featured image"}
+                    className="w-full rounded-lg aspect-video object-cover"
+                  />
+                  {postingPlan.banner_description && (
+                    <div className="mt-3 flex items-center justify-between">
+                      <p className="text-xs text-zinc-500 italic">{postingPlan.banner_description}</p>
+                      <CopyButton text={postingPlan.banner_description} />
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center text-center py-6 space-y-3">
+                  <div className="w-14 h-14 bg-zinc-800 rounded-xl flex items-center justify-center">
+                    <svg className="w-7 h-7 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                   </div>
-                  <div>
-                    <p className="text-sm text-zinc-400 mb-1">Featured Image</p>
-                    <p className="text-xs text-zinc-600">Recommended: 1280 x 720</p>
-                  </div>
+                  <p className="text-xs text-zinc-600">1280 x 720</p>
                   {content.featured_image_prompt ? (
                     <button
-                      onClick={handleGenerateImage}
-                      disabled={imageLoading}
-                      className="px-4 py-2 bg-emerald-500/10 text-emerald-400 rounded-lg text-sm font-medium hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
+                      onClick={handleGenerateFeatured}
+                      disabled={featuredLoading}
+                      className="px-4 py-2 bg-emerald-500/10 text-emerald-400 rounded-lg text-sm font-medium hover:bg-emerald-500/20 transition-colors disabled:opacity-50 flex items-center gap-2"
                     >
-                      {imageLoading ? (
-                        <span className="flex items-center gap-2">
-                          <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                          </svg>
-                          Generating...
-                        </span>
-                      ) : (
-                        "Generate Featured Image"
-                      )}
+                      {featuredLoading ? <><SpinnerIcon /> Generating...</> : "Generate Featured Image"}
                     </button>
                   ) : (
                     <p className="text-xs text-zinc-600">No image prompt available</p>
                   )}
                 </div>
-              </Card>
-            )}
-
-            {/* Image Prompt */}
-            {content.featured_image_prompt && (
-              <Card className="rounded-xl border-border p-5">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-xs font-black text-zinc-500 uppercase tracking-widest">Image Prompt</h4>
-                  <CopyButton text={content.featured_image_prompt} />
+              )}
+              {content.featured_image_prompt && (
+                <div className="mt-3 pt-3 border-t border-zinc-800">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-bold text-zinc-600 uppercase">Prompt</span>
+                    <CopyButton text={content.featured_image_prompt} />
+                  </div>
+                  <p className="text-xs text-zinc-500 leading-relaxed">{content.featured_image_prompt}</p>
                 </div>
-                <p className="text-xs text-zinc-500 leading-relaxed">{content.featured_image_prompt}</p>
-              </Card>
-            )}
+              )}
+            </Card>
 
-            {/* Banner Description */}
-            {postingPlan.banner_description && (
-              <Card className="rounded-xl border-border p-5">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-xs font-black text-zinc-500 uppercase tracking-widest">Banner Description / Alt Text</h4>
-                  <CopyButton text={postingPlan.banner_description} />
+            {/* Inline Images */}
+            {content.inline_image_prompts && content.inline_image_prompts.length > 0 && (
+              <>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-black text-zinc-500 uppercase tracking-widest">
+                    Inline Images ({content.inline_image_prompts.length})
+                  </h4>
+                  <button
+                    onClick={handleGenerateAllInline}
+                    className="text-xs bg-emerald-500/10 text-emerald-400 px-3 py-1.5 rounded-lg hover:bg-emerald-500/20 transition-colors font-medium"
+                  >
+                    Generate All
+                  </button>
                 </div>
-                <p className="text-sm text-zinc-300">{postingPlan.banner_description}</p>
-              </Card>
+                {content.inline_image_prompts.map((ip) => (
+                  <Card key={ip.index} className="rounded-xl border-border p-5">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-bold text-zinc-600 uppercase">Image {ip.index + 1}</span>
+                      {inlineImages[ip.index] && (
+                        <div className="flex gap-2">
+                          <a
+                            href={inlineImages[ip.index]}
+                            download={`inline-image-${ip.index + 1}.png`}
+                            className="text-xs bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded-md hover:bg-emerald-500/20 transition-colors"
+                          >
+                            Download
+                          </a>
+                          <button
+                            onClick={() => handleGenerateInline(ip.index, ip.prompt)}
+                            disabled={inlineLoading[ip.index]}
+                            className="text-xs bg-zinc-800 text-zinc-400 px-2 py-1 rounded-md hover:bg-zinc-700 transition-colors"
+                          >
+                            Regenerate
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    {inlineImages[ip.index] ? (
+                      <>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={inlineImages[ip.index]}
+                          alt={ip.alt}
+                          className="w-full rounded-lg aspect-video object-cover"
+                        />
+                        <p className="text-[10px] text-zinc-600 italic mt-2">{ip.alt}</p>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => handleGenerateInline(ip.index, ip.prompt)}
+                        disabled={inlineLoading[ip.index]}
+                        className="w-full py-4 bg-zinc-800/50 rounded-lg text-xs text-zinc-400 hover:bg-zinc-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {inlineLoading[ip.index] ? <><SpinnerIcon /> Generating...</> : <>Generate Image {ip.index + 1}</>}
+                      </button>
+                    )}
+                    <div className="mt-2 pt-2 border-t border-zinc-800">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-bold text-zinc-600 uppercase">Prompt</span>
+                        <CopyButton text={ip.prompt} />
+                      </div>
+                      <p className="text-xs text-zinc-500 leading-relaxed">{ip.prompt}</p>
+                    </div>
+                  </Card>
+                ))}
+              </>
             )}
           </div>
         </TabsContent>
@@ -291,6 +493,9 @@ export default function BlogPreview({ data }: { data: BlogDeliverable }) {
                 </div>
               </div>
             </Card>
+
+            {/* Banner Description */}
+            {postingPlan.banner_description && <SeoField label="Banner Description / Alt Text" value={postingPlan.banner_description} />}
 
             {/* Posting Time */}
             <Card className="rounded-xl border-border p-5">
