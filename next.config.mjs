@@ -2,6 +2,19 @@
 const nextConfig = {
   serverExternalPackages: ["bcryptjs"],
   poweredByHeader: false,
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value: "frame-ancestors 'self' https://daftar-one.vercel.app http://localhost:3000",
+          },
+        ],
+      },
+    ];
+  },
   experimental: {
     optimizePackageImports: [
       "lucide-react",
